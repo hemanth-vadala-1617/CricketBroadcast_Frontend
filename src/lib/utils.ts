@@ -69,3 +69,10 @@ export function caretAfterDigits(formatted: string, digits: number): number {
   }
   return formatted.length
 }
+
+/** 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th" (and 11 -> "11th"). */
+export function ordinal(n: number): string {
+  const v = n % 100
+  if (v >= 11 && v <= 13) return `${n}th`
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`
+}

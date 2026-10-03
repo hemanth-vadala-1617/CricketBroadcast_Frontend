@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { Badge, Button, Field, FilterBar, ImageUpload, Input, PageHeader, SearchBox, Select, Table, Td, Textarea, Th } from '../../components/ui'
+import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ActionMenu, Badge, Button, Field, FilterBar, ImageUpload, Input, PageHeader, SearchBox, Select, Table, Td, Textarea, Th, Truncate } from '../../components/ui'
 import { errorMessage } from '../../lib/api'
 import type { MatchFormat, Tournament, TournamentInput } from '../../lib/types'
 import { keys, useRules, useSaveMutation, useThemes, useTournaments } from '../../hooks/queries'
 import { toast } from '../../store/useToast'
 import { DeleteDialog, EntityModal, FormGrid, ListCard } from './AdminKit'
+import { rowClick } from './rowClick'
 import { useDeleteFlow, useIsAdmin } from './adminHooks'
+import TournamentViewModal from './TournamentViewModal'
 
 const FORMATS: MatchFormat[] = ['T20', 'ODI', 'TEST', 'CUSTOM']
 const STATUSES = ['Upcoming', 'Live', 'Completed']
@@ -84,6 +86,7 @@ export default function TournamentsPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [editing, setEditing] = useState<Tournament | 'new' | null>(null)
+  const [viewing, setViewing] = useState<Tournament | null>(null)
   const tournaments = useTournaments()
   const rules = useRules()
   const themes = useThemes()
@@ -111,26 +114,31 @@ export default function TournamentsPage() {
       </FilterBar>
       <ListCard loading={tournaments.isLoading} error={tournaments.error ? errorMessage(tournaments.error) : null} onRetry={() => void tournaments.refetch()}
         isEmpty={rows.length === 0} emptyTitle={filtered ? 'No tournaments match these filters.' : 'No tournaments yet.'} emptyHint={filtered ? undefined : 'Create one before scheduling matches.'}>
-        <Table head={<tr><Th>Tournament</Th><Th>Format</Th><Th>Dates</Th><Th>Rules</Th><Th>Theme</Th><Th>Status</Th>{isAdmin && <Th className="text-right">Actions</Th>}</tr>}>
+        <Table head={<tr><Th>Tournament</Th><Th>Format</Th><Th>Dates</Th><Th>Rules</Th><Th>Theme</Th><Th>Status</Th><Th className="text-right">Actions</Th></tr>}>
           {rows.map((t) => (
-            <tr key={t.id} className="hover:bg-slate-50">
-              <Td><div className="font-semibold text-slate-900">{t.name}</div><div className="text-xs text-slate-500">{t.shortName} · {t.season}</div></Td>
+            <tr key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={rowClick(() => setViewing(t))}>
+              <Td>
+                <button type="button" onClick={() => setViewing(t)} title={t.name} className="block max-w-[16rem] truncate text-left font-semibold text-slate-900 hover:text-brand hover:underline focus-visible:outline-2 focus-visible:outline-brand">{t.name}</button>
+                <div className="text-xs text-slate-500">{t.shortName} · {t.season}</div>
+              </Td>
               <Td><Badge tone="blue">{t.format}</Badge></Td>
-              <Td className="whitespace-nowrap text-xs">{day(t.startDate)} â†’ {day(t.endDate)}</Td>
-              <Td>{ruleName(t.defaultMatchRulesId)}</Td>
-              <Td>{themeName(t.overlayThemeId)}</Td>
+              <Td className="whitespace-nowrap text-xs">{day(t.startDate)} → {day(t.endDate)}</Td>
+              <Td><Truncate text={ruleName(t.defaultMatchRulesId)} max="max-w-[9rem]" /></Td>
+              <Td><Truncate text={themeName(t.overlayThemeId)} max="max-w-[9rem]" /></Td>
               <Td><Badge tone={t.status === 'Live' ? 'green' : t.status === 'Completed' ? 'purple' : 'gray'}>{t.status}</Badge></Td>
-              {isAdmin && (
-                <Td className="text-right">
-                  <Button size="sm" variant="ghost" aria-label={`Edit ${t.name}`} onClick={() => setEditing(t)}><Pencil className="size-4" /></Button>
-                  <Button size="sm" variant="ghost" aria-label={`Delete ${t.name}`} onClick={() => del.ask(t.id, t.name)}><Trash2 className="size-4 text-red-600" /></Button>
-                </Td>
-              )}
+              <Td className="text-right">
+                <ActionMenu label={`Actions for ${t.name}`} items={[
+                  { label: 'View', icon: <Eye className="size-4" aria-hidden />, onSelect: () => setViewing(t) },
+                  { label: 'Edit', icon: <Pencil className="size-4" aria-hidden />, onSelect: () => setEditing(t), hidden: !isAdmin },
+                  { label: 'Delete', icon: <Trash2 className="size-4" aria-hidden />, onSelect: () => del.ask(t.id, t.name), danger: true, hidden: !isAdmin },
+                ]} />
+              </Td>
             </tr>
           ))}
         </Table>
       </ListCard>
       {editing && <TournamentModal key={editing === 'new' ? 'new' : editing.id} tournament={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
+      {viewing && <TournamentViewModal key={viewing.id} tournament={viewing} isAdmin={isAdmin} onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null) }} />}
       <DeleteDialog flow={del} noun="tournament" extra="A tournament that has matches cannot be deleted." />
     </>
   )

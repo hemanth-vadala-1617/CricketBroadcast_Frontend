@@ -1,6 +1,7 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BroadcastOverlay } from './BroadcastOverlay'
+import { BOX_AFTER_BURST_MS, EVENT_MS } from './EventBurst'
 import { limitedOversState, referenceState, withGraphics } from './fixtures'
 import type { MatchState } from '../../lib/types'
 
@@ -53,8 +54,8 @@ describe('BroadcastOverlay - reference Test-match scorebug', () => {
       ...withGraphics(base, { FullScorecard: true, Banner: true }),
       graphics: { ...withGraphics(base, { FullScorecard: true, Banner: true }).graphics, Banner: { isVisible: true, payload: { text: 'Happy Independence Day' } } },
       scorecard: [{
-        inningsNumber: 1, battingTeam: base.homeTeam, runs: 198, wickets: 10, overs: '70.2', extras: 8, extrasText: '(b 4, w 4)', isCompleted: true,
-        batting: [{ playerId: 'a', name: 'Travis Head', runs: 50, balls: 60, fours: 6, sixes: 1, strikeRate: 83.3, status: 'out', dismissalText: 'c Shanto b Taijul' }],
+        inningsNumber: 1, battingTeam: base.homeTeam, runs: 198, wickets: 10, overs: '70.2', extras: 8, runRate: 2.81, extrasText: '(b 4, w 4)', isCompleted: true,
+        batting: [{ playerId: 'a', name: 'Travis Head', isCaptain: false, isWicketKeeper: false, runs: 50, balls: 60, fours: 6, sixes: 1, strikeRate: 83.3, status: 'out', dismissalText: 'c Shanto b Taijul' }],
         bowling: [{ playerId: 'b', name: 'Taijul Islam', overs: '20.0', maidens: 2, runs: 60, wickets: 4, wides: 0, noBalls: 0, economy: 3 }],
         fallOfWickets: [{ wicketNumber: 1, score: 20, overs: '5.1', batterName: 'Travis Head' }], yetToBat: [],
       }],
@@ -90,14 +91,47 @@ describe('BroadcastOverlay - last ball box', () => {
   it('stays plain on first render and highlights when a NEW ball arrives', () => {
     const { rerender } = render(<BroadcastOverlay state={referenceState()} />)
     expect(screen.getByTestId('last-ball')).toHaveAttribute('data-highlight', 'false')
-    expect(screen.getByTestId('last-ball')).not.toHaveClass('anim-pop')
+    expect(screen.getByTestId('last-ball')).toHaveAttribute('data-flair', 'none')
 
     rerender(<BroadcastOverlay state={referenceState({ version: 11, lastBall: { ballId: 'b101', label: '4', kind: 'Four', runs: 4 } })} />)
-    const box = screen.getByTestId('last-ball')
-    expect(box).toHaveAttribute('data-highlight', 'true')
-    expect(box).toHaveClass('anim-pop')
-    expect(box).toHaveTextContent('4')
-    expect(box).toHaveStyle({ background: '#16a34a' })
+    // in play a four first gets the big burst; the box holds its previous result until the burst is done (see the next test)
+    expect(screen.getByTestId('event-burst')).toHaveAttribute('data-kind', 'Four')
+    expect(screen.getByTestId('last-ball')).toHaveAttribute('data-highlight', 'false')
+  })
+
+  it('in play, the box starts just AFTER the big burst begins: not at the same time, not after it has gone', () => {
+    vi.useFakeTimers()
+    try {
+      const { rerender } = render(<BroadcastOverlay state={referenceState()} />)
+      rerender(<BroadcastOverlay state={referenceState({ version: 11, lastBall: { ballId: 'b101', label: '6', kind: 'Six', runs: 6 } })} />)
+      expect(screen.getByTestId('event-burst')).toHaveAttribute('data-kind', 'Six')               // the big animation starts first ...
+      expect(screen.getByTestId('last-ball')).toHaveAttribute('data-highlight', 'false')         // ... the box is not in step with it
+
+      act(() => { vi.advanceTimersByTime(BOX_AFTER_BURST_MS - 1) })
+      expect(screen.getByTestId('last-ball')).toHaveAttribute('data-highlight', 'false')         // still just before its turn
+
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByTestId('last-ball')).toHaveAttribute('data-highlight', 'true')          // the box starts ...
+      expect(screen.getByTestId('last-ball')).toHaveAttribute('data-flair', 'foil')
+      expect(screen.getByTestId('event-burst')).toBeInTheDocument()                               // ... while the big one is still on screen
+
+      act(() => { vi.advanceTimersByTime(EVENT_MS) })
+      expect(screen.queryByTestId('event-burst')).toBeNull()                                      // the big one leaves; the box carries on
+      expect(screen.getByTestId('last-ball')).toHaveAttribute('data-highlight', 'true')
+    } finally { vi.useRealTimers() }
+  })
+
+  it('the box starts after the big text has landed but well before the burst ends', () => {
+    expect(BOX_AFTER_BURST_MS).toBeGreaterThan(EVENT_MS * 0.2)        // the text lands at ~20% of the burst
+    expect(BOX_AFTER_BURST_MS).toBeLessThan(EVENT_MS * 0.5)           // and it does not wait for the burst to finish
+  })
+
+  it('with no burst on screen (innings break), the box does not wait', () => {
+    const base = referenceState({ status: 'InningsBreak' })
+    const { rerender } = render(<BroadcastOverlay state={base} />)
+    rerender(<BroadcastOverlay state={{ ...base, version: 11, lastBall: { ballId: 'b102', label: '4', kind: 'Four', runs: 4 } }} />)
+    expect(screen.queryByTestId('event-burst')).toBeNull()
+    expect(screen.getByTestId('last-ball')).toHaveAttribute('data-highlight', 'true')
   })
 
   it('does not re-highlight when the same ball is re-sent', () => {

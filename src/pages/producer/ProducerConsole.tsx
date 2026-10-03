@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, Eye, EyeOff, Radio } from 'lucide-react'
+import { ArrowLeft, Copy, Eye, EyeOff, Radio, Target } from 'lucide-react'
 import { useLiveMatch } from '../../hooks/useLiveMatch'
 import { api, errorMessage } from '../../lib/api'
 import { overlayUrl } from '../../lib/overlayUrl'
@@ -118,6 +118,7 @@ export default function ProducerConsole() {
           </div>
           <div className="flex items-center gap-2">
             <Badge tone={status === 'live' ? 'green' : 'amber'}>{status === 'live' ? 'Connected' : `Socket ${status}`}</Badge>
+            <Link to={`/scorer/${matchId}`} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Target className="size-4" aria-hidden />Scorer console</Link>
             <Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(overlayUrl(matchId)).then(() => toast.success('Overlay URL copied. Paste it into an OBS Browser Source (1920x1080).'), () => toast.error('Could not copy; select the URL manually.')) }}>
               <Copy className="size-4" aria-hidden />Copy overlay URL
             </Button>
@@ -143,7 +144,8 @@ export default function ProducerConsole() {
                 ))}
               </ul>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="primary" disabled={lineups.every((l) => l.players.length === 0)} onClick={() => void rollBoth()}>Roll out both teams</Button>
+                <Button variant="primary" disabled={lineups.every((l) => l.players.length === 0)} onClick={() => void rollBoth()}>One after the other</Button>
+                <Button variant="success" disabled={lineups.some((l) => l.players.length === 0) || lineupOn === 'both'} loading={busy === 'TeamLineuptrue'} onClick={() => { sequence.current++; void showLineup('both') }}>Both together</Button>
                 <Button variant="danger" disabled={!lineupOn} loading={busy === 'TeamLineupfalse'} onClick={() => void hideLineup()}><EyeOff className="size-4" aria-hidden />HIDE</Button>
               </div>
             </Card>

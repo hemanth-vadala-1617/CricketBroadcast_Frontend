@@ -1,11 +1,11 @@
-﻿import type { Batter, TeamLite, Theme } from '../../lib/types'
+import type { Batter, TeamLite, Theme } from '../../lib/types'
 import { BatIcon, PlayerPhoto, TeamLogo } from './OverlayBits'
 
 export const CARD_W = 560
 export const CARD_H = 230
 
-export function CardShell({ label, team, theme, marker, photo, children, stats }: {
-  label: string; team: TeamLite; theme: Theme; marker?: boolean
+export function CardShell({ label, team, theme, marker, out, photo, children, stats }: {
+  label: string; team: TeamLite; theme: Theme; marker?: boolean; out?: string
   photo: { name: string; url: string | null }; children: React.ReactNode; stats: string[]
 }) {
   return (
@@ -14,7 +14,8 @@ export function CardShell({ label, team, theme, marker, photo, children, stats }
         <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 56, background: '#000', display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px 0 150px' }}>
           <TeamLogo team={team} size={38} />
           <span className="font-display" style={{ fontSize: 34, fontWeight: 700, letterSpacing: 2, color: theme.accentColor }}>{label}</span>
-          {marker && <span data-testid="strike-marker" style={{ marginLeft: 'auto' }}><BatIcon size={34} color="#4ade80" /></span>}
+          {out && <span data-testid="out-badge" className="font-display" style={{ marginLeft: 'auto', padding: '0 16px', background: '#dc2626', color: '#fff', fontSize: 32, fontWeight: 700, letterSpacing: 3 }}>{out}</span>}
+          {marker && !out && <span data-testid="strike-marker" style={{ marginLeft: 'auto' }}><BatIcon size={34} color="#4ade80" /></span>}
         </div>
         <div style={{ position: 'absolute', left: 150, right: 12, top: 62, bottom: 56, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
           {children}
@@ -30,11 +31,11 @@ export function CardShell({ label, team, theme, marker, photo, children, stats }
   )
 }
 
-export function BatterCard({ batter, team, theme }: { batter: Batter; team: TeamLite; theme: Theme }) {
+export function BatterCard({ batter, team, theme, out, detail }: { batter: Batter; team: TeamLite; theme: Theme; out?: string; detail?: string }) {
   return (
     <CardShell
-      label="BATSMAN" team={team} theme={theme} marker={batter.onStrike} photo={{ name: batter.name, url: batter.photoUrl }}
-      stats={[`4s:${batter.fours}`, `6s:${batter.sixes}`, `SR:${batter.strikeRate.toFixed(2)}`]}
+      label="BATSMAN" team={team} theme={theme} marker={batter.onStrike} out={out} photo={{ name: batter.name, url: batter.photoUrl }}
+      stats={detail ? [detail] : [`4s:${batter.fours}`, `6s:${batter.sixes}`, `SR:${batter.strikeRate.toFixed(2)}`]}
     >
       <div className="font-display" style={{ fontSize: 36, fontWeight: 600, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{batter.name}</div>
       <div className="font-display" style={{ fontSize: 64, fontWeight: 700, lineHeight: 1.05, color: theme.accentColor, whiteSpace: 'nowrap' }}>{`${batter.runs} (${batter.balls})`}</div>

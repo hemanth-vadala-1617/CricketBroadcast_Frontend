@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui'
 import { cn } from '../../lib/utils'
 import type { PadAction } from '../../pages/scorer/buildRequest'
@@ -35,17 +35,26 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
 
   const send = (a: PadAction) => { setPanel(null); onAction(a) }
 
+  // The key listener is attached once, so it must read the handlers through a ref. Capturing them in the effect left it
+  // calling the scoring action from an old render (stale match version), so the shortcuts silently did nothing or failed.
+  const latest = useRef({ onAction, onWicket, onSwap, onUndo })
+  useEffect(() => { latest.current = { onAction, onWicket, onSwap, onUndo } })
+
   useEffect(() => {
     if (!shortcuts || disabled) return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
-      if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); onUndo?.(); return }
+      if (e.repeat) return
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); latest.current.onUndo?.(); return }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
-      if (/^[0-6]$/.test(k)) { e.preventDefault(); const n = Number(k); send({ kind: 'runs', runs: n, boundary: n === 4 || n === 6 }); return }
+      if (/^[0-6]$/.test(k)) {
+        e.preventDefault(); const n = Number(k)
+        setPanel(null); latest.current.onAction({ kind: 'runs', runs: n, boundary: n === 4 || n === 6 }); return
+      }
       const map: Record<string, () => void> = {
-        w: onWicket, s: () => onSwap?.(),
+        w: () => latest.current.onWicket(), s: () => latest.current.onSwap?.(),
         d: () => setPanel('wide'), n: () => setPanel('noball'), b: () => setPanel('bye'), l: () => setPanel('legbye'),
       }
       if (map[k]) { e.preventDefault(); map[k]!() }
@@ -53,7 +62,7 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shortcuts, disabled, onWicket, onSwap, onUndo])
+  }, [shortcuts, disabled])
 
   const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p))
 

@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { Button, Field, FilterBar, ImageUpload, Input, NumberInput, PageHeader, SearchBox, Table, Td, Th } from '../../components/ui'
+import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ActionMenu, Button, Field, FilterBar, ImageUpload, Input, NumberInput, PageHeader, SearchBox, Table, Td, Th, Truncate } from '../../components/ui'
 import { errorMessage } from '../../lib/api'
 import type { Venue, VenueInput } from '../../lib/types'
 import { keys, useSaveMutation, useVenues } from '../../hooks/queries'
 import { toast } from '../../store/useToast'
 import { assetUrl, formatIndianNumber } from '../../lib/utils'
+import { rowClick } from './rowClick'
+import DetailsModal from './DetailsModal'
 import { DeleteDialog, EntityModal, FormGrid, ListCard } from './AdminKit'
 import { useDebounced, useDeleteFlow, useIsAdmin } from './adminHooks'
 
@@ -48,6 +50,7 @@ export default function VenuesPage() {
   const isAdmin = useIsAdmin()
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Venue | 'new' | null>(null)
+  const [viewing, setViewing] = useState<Venue | null>(null)
   const venues = useVenues(useDebounced(search))
   const del = useDeleteFlow('/api/venues', [keys.venues], 'Venue')
 
@@ -61,23 +64,32 @@ export default function VenuesPage() {
       </FilterBar>
       <ListCard loading={venues.isLoading} error={venues.error ? errorMessage(venues.error) : null} onRetry={() => void venues.refetch()}
         isEmpty={(venues.data ?? []).length === 0} emptyTitle={search ? 'No venues match.' : 'No venues yet.'}>
-        <Table head={<tr><Th>Venue</Th><Th>Location</Th><Th>Capacity</Th><Th>Background</Th>{isAdmin && <Th className="text-right">Actions</Th>}</tr>}>
+        <Table head={<tr><Th>Venue</Th><Th>Location</Th><Th>Capacity</Th><Th>Background</Th><Th className="text-right">Actions</Th></tr>}>
           {(venues.data ?? []).map((v) => (
-            <tr key={v.id} className="hover:bg-slate-50">
-              <Td className="font-semibold text-slate-900">{v.name}</Td>
-              <Td>{[v.city, v.state, v.country].filter(Boolean).join(', ') || '—'}</Td>
+            <tr key={v.id} className="cursor-pointer hover:bg-slate-50" onClick={rowClick(() => setViewing(v))}>
+              <Td><Truncate text={v.name} max="max-w-[15rem]" className="font-semibold text-slate-900" /></Td>
+              <Td><Truncate text={[v.city, v.state, v.country].filter(Boolean).join(', ')} max="max-w-[14rem]" /></Td>
               <Td>{v.capacity ? formatIndianNumber(v.capacity) : '—'}</Td>
               <Td>{v.groundImageUrl ? <img src={assetUrl(v.groundImageUrl)} alt="" className="h-10 w-20 rounded object-cover" /> : '—'}</Td>
-              {isAdmin && (
-                <Td className="text-right">
-                  <Button size="sm" variant="ghost" aria-label={`Edit ${v.name}`} onClick={() => setEditing(v)}><Pencil className="size-4" /></Button>
-                  <Button size="sm" variant="ghost" aria-label={`Delete ${v.name}`} onClick={() => del.ask(v.id, v.name)}><Trash2 className="size-4 text-red-600" /></Button>
-                </Td>
-              )}
+              <Td className="text-right">
+                <ActionMenu label={`Actions for ${v.name}`} items={[
+                  { label: 'View', icon: <Eye className="size-4" aria-hidden />, onSelect: () => setViewing(v) },
+                  { label: 'Edit', icon: <Pencil className="size-4" aria-hidden />, onSelect: () => setEditing(v), hidden: !isAdmin },
+                  { label: 'Delete', icon: <Trash2 className="size-4" aria-hidden />, onSelect: () => del.ask(v.id, v.name), danger: true, hidden: !isAdmin },
+                ]} />
+              </Td>
             </tr>
           ))}
         </Table>
       </ListCard>
+      {viewing && (
+        <DetailsModal title={viewing.name} canEdit={isAdmin} onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null) }}
+          header={viewing.groundImageUrl ? <img src={assetUrl(viewing.groundImageUrl)} alt={`${viewing.name} ground`} className="h-44 w-full rounded-lg border border-slate-200 object-cover" /> : undefined}
+          rows={[
+            { label: 'City', value: viewing.city || null }, { label: 'State', value: viewing.state || null }, { label: 'Country', value: viewing.country || null },
+            { label: 'Capacity', value: viewing.capacity ? formatIndianNumber(viewing.capacity) : null }, { label: 'Time zone', value: viewing.timezone || null },
+          ]} />
+      )}
       {editing && <VenueModal key={editing === 'new' ? 'new' : editing.id} venue={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       <DeleteDialog flow={del} noun="venue" extra="A venue used by a match cannot be deleted." />
     </>

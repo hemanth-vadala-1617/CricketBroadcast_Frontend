@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { Badge, Button, Checkbox, Field, Input, NumberInput, PageHeader, Table, Td, Th } from '../../components/ui'
+import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ActionMenu, Badge, Button, Checkbox, Field, Input, NumberInput, PageHeader, Table, Td, Th, Truncate } from '../../components/ui'
 import { errorMessage } from '../../lib/api'
 import type { MatchRules, MatchRulesInput } from '../../lib/types'
 import { keys, useRules, useSaveMutation } from '../../hooks/queries'
 import { toast } from '../../store/useToast'
+import { rowClick } from './rowClick'
+import DetailsModal from './DetailsModal'
 import { DeleteDialog, EntityModal, FormGrid, ListCard } from './AdminKit'
 import { useDeleteFlow } from './adminHooks'
 
@@ -73,6 +75,7 @@ function RulesModal({ rules, onClose }: { rules: MatchRules | null; onClose: () 
 export default function RulesPage() {
   const rules = useRules()
   const [editing, setEditing] = useState<MatchRules | 'new' | null>(null)
+  const [viewing, setViewing] = useState<MatchRules | null>(null)
   const del = useDeleteFlow('/api/match-rules', [keys.rules], 'Rules')
   const summary = (r: MatchRules) => r.isTest
     ? `${r.days} days · ${r.oversPerDay} overs/day · ${r.sessionsPerDay} sessions`
@@ -85,20 +88,35 @@ export default function RulesPage() {
         isEmpty={(rules.data ?? []).length === 0} emptyTitle="No rules yet.">
         <Table head={<tr><Th>Name</Th><Th>Type</Th><Th>Summary</Th><Th>Wide / No-ball</Th><Th>Free hit</Th><Th className="text-right">Actions</Th></tr>}>
           {(rules.data ?? []).map((r) => (
-            <tr key={r.id} className="hover:bg-slate-50">
-              <Td className="font-semibold text-slate-900">{r.name}</Td>
+            <tr key={r.id} className="cursor-pointer hover:bg-slate-50" onClick={rowClick(() => setViewing(r))}>
+              <Td><Truncate text={r.name} max="max-w-[14rem]" className="font-semibold text-slate-900" /></Td>
               <Td><Badge tone={r.isTest ? 'purple' : 'blue'}>{r.isTest ? 'Test' : 'Limited overs'}</Badge></Td>
-              <Td className="text-xs">{summary(r)}</Td>
+              <Td><Truncate text={summary(r)} max="max-w-[18rem]" className="text-xs" /></Td>
               <Td>{r.wideRuns} / {r.noBallRuns}</Td>
               <Td>{r.freeHitEnabled ? 'Yes' : 'No'}</Td>
               <Td className="text-right">
-                <Button size="sm" variant="ghost" aria-label={`Edit ${r.name}`} onClick={() => setEditing(r)}><Pencil className="size-4" /></Button>
-                <Button size="sm" variant="ghost" aria-label={`Delete ${r.name}`} onClick={() => del.ask(r.id, r.name)}><Trash2 className="size-4 text-red-600" /></Button>
+                <ActionMenu label={`Actions for ${r.name}`} items={[
+                  { label: 'View', icon: <Eye className="size-4" aria-hidden />, onSelect: () => setViewing(r) },
+                  { label: 'Edit', icon: <Pencil className="size-4" aria-hidden />, onSelect: () => setEditing(r) },
+                  { label: 'Delete', icon: <Trash2 className="size-4" aria-hidden />, onSelect: () => del.ask(r.id, r.name), danger: true },
+                ]} />
               </Td>
             </tr>
           ))}
         </Table>
       </ListCard>
+      {viewing && (
+        <DetailsModal title={viewing.name} canEdit onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null) }}
+          header={<Badge tone={viewing.isTest ? 'purple' : 'blue'}>{viewing.isTest ? 'Test' : 'Limited overs'}</Badge>}
+          rows={[
+            { label: 'Summary', value: summary(viewing) }, { label: 'Balls per over', value: viewing.ballsPerOver },
+            { label: 'Wide / no-ball', value: `${viewing.wideRuns} / ${viewing.noBallRuns} runs` }, { label: 'Free hit', value: viewing.freeHitEnabled ? 'Yes' : 'No' },
+            ...(viewing.isTest
+              ? [{ label: 'Days', value: viewing.days }, { label: 'Overs a day', value: viewing.oversPerDay }, { label: 'Sessions a day', value: viewing.sessionsPerDay },
+                 { label: 'Innings per side', value: viewing.inningsPerSide }, { label: 'Follow-on', value: viewing.followOnEnabled ? `Yes, at ${viewing.followOnMargin}` : 'No' }, { label: 'New ball after', value: `${viewing.newBallAfterOvers} overs` }]
+              : [{ label: 'Overs per innings', value: viewing.oversPerInnings }, { label: 'Max overs per bowler', value: viewing.maxOversPerBowler > 0 ? viewing.maxOversPerBowler : 'No limit' }, { label: 'Powerplay', value: viewing.powerplayOvers > 0 ? `${viewing.powerplayOvers} overs` : 'None' }]),
+          ]} />
+      )}
       {editing && <RulesModal key={editing === 'new' ? 'new' : editing.id} rules={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       <DeleteDialog flow={del} noun="rules" extra="Rules used by a match cannot be deleted." />
     </>

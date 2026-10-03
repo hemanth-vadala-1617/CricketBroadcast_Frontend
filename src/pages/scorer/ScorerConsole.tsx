@@ -11,6 +11,7 @@ import WicketModal from '../../components/scorer/WicketModal'
 import PreInnings from '../../components/scorer/PreInnings'
 import { CheatSheet, CompleteMatchModal, OversLostModal, PenaltyModal, PlayerPicker, RetireModal, UndoModal } from '../../components/scorer/Dialogs'
 import { useScorer } from './useScorer'
+import { LineupToggle } from '../../components/scorer/LineupAirToggle'
 import type { PadAction } from './buildRequest'
 
 type Dlg = null | 'wicket' | 'editWicket' | 'edit' | 'undo' | 'retire' | 'penalty' | 'endInnings' | 'declare' | 'complete'
@@ -75,9 +76,12 @@ export default function ScorerConsole() {
           <p className="truncate text-xs text-slate-500">{state.tournamentName} · {state.venueName}</p>
         </div>
         <StatusBadge status={state.status} />
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600" role="status" aria-label={`Connection: ${dot[status].label}`}>
-          <span className={cn('size-2.5 rounded-full', dot[status].color)} />{dot[status].label}
-        </span>
+        {/* Only shown when the connection is NOT fine: a second "Live" next to the match's LIVE badge was confusing. */}
+        {status !== 'live' && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600" role="status" aria-label={`Connection: ${dot[status].label}`}>
+            <span className={cn('size-2.5 rounded-full', dot[status].color)} />{dot[status].label}
+          </span>
+        )}
         <Link to={`/producer/${matchId}`} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Radio className="size-4" />Producer</Link>
         <Button size="sm" variant="secondary" aria-pressed={preview} onClick={() => setPreview((p) => !p)}>{preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}Preview</Button>
         <Button size="sm" variant="secondary" aria-label="Keyboard shortcuts" onClick={() => setDlg('cheat')}><Keyboard className="size-4" /></Button>
@@ -159,6 +163,9 @@ export default function ScorerConsole() {
               </ul>
             </Card>
           )}
+
+          {/* put a team's playing XI on air without leaving the scoring screen */}
+          <LineupToggle state={state} onState={apply} />
         </aside>
       </div>
 

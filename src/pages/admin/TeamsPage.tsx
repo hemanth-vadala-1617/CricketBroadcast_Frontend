@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { Button, Checkbox, ColorField, Field, FilterBar, ImageUpload, Input, PageHeader, SearchBox, TeamBadge, Table, Td, Th } from '../../components/ui'
+import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ActionMenu, Badge, Button, Checkbox, ColorField, Field, FilterBar, ImageUpload, Input, PageHeader, SearchBox, TeamBadge, Table, Td, Th, Truncate } from '../../components/ui'
 import { errorMessage } from '../../lib/api'
 import type { Team, TeamInput } from '../../lib/types'
 import { keys, useSaveMutation, useTeams } from '../../hooks/queries'
 import { toast } from '../../store/useToast'
+import { rowClick } from './rowClick'
+import DetailsModal from './DetailsModal'
 import { DeleteDialog, EntityModal, FormGrid, ListCard } from './AdminKit'
 import { useDeleteFlow, useIsAdmin } from './adminHooks'
 
@@ -45,6 +47,7 @@ export default function TeamsPage() {
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [editing, setEditing] = useState<Team | 'new' | null>(null)
+  const [viewing, setViewing] = useState<Team | null>(null)
   const teams = useTeams(showInactive)
   const del = useDeleteFlow('/api/teams', [keys.teams], 'Team')
 
@@ -65,24 +68,34 @@ export default function TeamsPage() {
       </FilterBar>
       <ListCard loading={teams.isLoading} error={teams.error ? errorMessage(teams.error) : null} onRetry={() => void teams.refetch()}
         isEmpty={rows.length === 0} emptyTitle={filtered ? 'No teams match these filters.' : 'No teams yet.'} emptyHint={filtered ? undefined : 'Add the teams that will play before scheduling a match.'}>
-        <Table head={<tr><Th>Team</Th><Th>Short</Th><Th>Country</Th><Th>Players</Th><Th>Status</Th>{isAdmin && <Th className="text-right">Actions</Th>}</tr>}>
+        <Table head={<tr><Th>Team</Th><Th>Short</Th><Th>Country</Th><Th>Players</Th><Th>Status</Th><Th className="text-right">Actions</Th></tr>}>
           {rows.map((t) => (
-            <tr key={t.id} className="hover:bg-slate-50">
-              <Td><div className="flex items-center gap-3"><TeamBadge team={t} /><span className="font-semibold text-slate-900">{t.name}</span></div></Td>
+            <tr key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={rowClick(() => setViewing(t))}>
+              <Td><div className="flex items-center gap-3"><TeamBadge team={t} /><Truncate text={t.name} max="max-w-[14rem]" className="font-semibold text-slate-900" /></div></Td>
               <Td className="font-mono">{t.shortName}</Td>
-              <Td>{t.country || '—'}</Td>
+              <Td><Truncate text={t.country} max="max-w-[10rem]" /></Td>
               <Td>{t.playerCount}</Td>
               <Td>{t.isActive ? 'Active' : <span className="font-semibold text-amber-700">Inactive</span>}</Td>
-              {isAdmin && (
-                <Td className="text-right">
-                  <Button size="sm" variant="ghost" aria-label={`Edit ${t.name}`} onClick={() => setEditing(t)}><Pencil className="size-4" /></Button>
-                  <Button size="sm" variant="ghost" aria-label={`Delete ${t.name}`} onClick={() => del.ask(t.id, t.name)}><Trash2 className="size-4 text-red-600" /></Button>
-                </Td>
-              )}
+              <Td className="text-right">
+                <ActionMenu label={`Actions for ${t.name}`} items={[
+                  { label: 'View', icon: <Eye className="size-4" aria-hidden />, onSelect: () => setViewing(t) },
+                  { label: 'Edit', icon: <Pencil className="size-4" aria-hidden />, onSelect: () => setEditing(t), hidden: !isAdmin },
+                  { label: 'Delete', icon: <Trash2 className="size-4" aria-hidden />, onSelect: () => del.ask(t.id, t.name), danger: true, hidden: !isAdmin },
+                ]} />
+              </Td>
             </tr>
           ))}
         </Table>
       </ListCard>
+      {viewing && (
+        <DetailsModal title={viewing.name} canEdit={isAdmin} onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null) }}
+          header={<div className="flex items-center gap-4"><TeamBadge team={viewing} size={72} /><div><h3 className="text-xl font-bold text-slate-900">{viewing.name}</h3><div className="mt-2 flex gap-2"><Badge>{viewing.shortName}</Badge><Badge tone={viewing.isActive ? 'green' : 'amber'}>{viewing.isActive ? 'Active' : 'Inactive'}</Badge></div></div></div>}
+          rows={[
+            { label: 'Short name', value: viewing.shortName }, { label: 'Country', value: viewing.country || null },
+            { label: 'Players', value: viewing.playerCount },
+            { label: 'Colours', value: <span className="flex gap-2">{[viewing.primaryColor, viewing.secondaryColor].map((c, i) => c ? <span key={i} title={c} className="size-6 rounded border border-slate-200" style={{ background: c }} /> : null)}</span> },
+          ]} />
+      )}
       {editing && <TeamModal key={editing === 'new' ? 'new' : editing.id} team={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       <DeleteDialog flow={del} noun="team" extra="A team that has played matches is deactivated instead of removed." />
     </>

@@ -1,24 +1,24 @@
 import type { CSSProperties } from 'react'
-import type { LineupPlayer, MatchState } from '../../lib/types'
+import type { Lineup, LineupPlayer, MatchState, Theme } from '../../lib/types'
 import { assetUrl, initials } from '../../lib/utils'
 import { TeamLogo } from './OverlayBits'
-import { CARD_GAP, cardName, cardWidth, fitFont, rowSizes, selectedLineup } from './lineup'
+import { BOTH, BOTH_GAP, CARD_GAP, cardName, cardWidth, cardWidthBoth, fitFont, rowSizes, selectedLineups } from './lineup'
 
 const FIRST_DELAY_MS = 450
 const STEP_MS = 170
 
-function PlayerCard({ player, width, color, accent, index }: { player: LineupPlayer; width: number; color: string; accent: string; index: number }) {
+function PlayerCard({ player, width, color, accent, delay, order }: { player: LineupPlayer; width: number; color: string; accent: string; delay: number; order: number }) {
   const { first, last } = cardName(player)
   const photoH = Math.round(width * 1.12)
   const plateH = Math.round(width * 0.34)
   const photo = assetUrl(player.photoUrl)
   const plate = `color-mix(in srgb, ${color} 22%, #050b24)`
   const style: CSSProperties = {
-    width, flexShrink: 0, animation: 'lineup-card-in .75s cubic-bezier(.2,.9,.3,1.12) both', animationDelay: `${FIRST_DELAY_MS + index * STEP_MS}ms`,
+    width, flexShrink: 0, animation: 'lineup-card-in .75s cubic-bezier(.2,.9,.3,1.12) both', animationDelay: `${delay}ms`,
     boxShadow: '0 14px 30px rgba(0,0,0,.55)', transformOrigin: '50% 100%',
   }
   return (
-    <div data-testid="lineup-card" data-order={index + 1} style={style}>
+    <div data-testid="lineup-card" data-order={order} data-delay={delay} style={style}>
       <div style={{ height: photoH, background: `linear-gradient(180deg, color-mix(in srgb, ${color} 80%, #fff) 0%, ${color} 70%)`, overflow: 'hidden', display: 'grid', placeItems: photo ? undefined : 'center' }}>
         {photo
           ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center', display: 'block' }} />
@@ -32,39 +32,83 @@ function PlayerCard({ player, width, color, accent, index }: { player: LineupPla
   )
 }
 
+// The grid of one team: rows of 4, 4, 3. `offset` delays this team's cards a little, so two teams do not move in lockstep.
+function Grid({ lineup, width, gap, color, accent, offset = 0 }: { lineup: Lineup; width: number; gap: number; color: string; accent: string; offset?: number }) {
+  const sizes = rowSizes(lineup.players.length)
+  let index = 0
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap, perspective: 1400 }}>
+      {sizes.map((count, row) => (
+        <div key={row} style={{ display: 'flex', gap, justifyContent: 'center' }}>
+          {lineup.players.slice(index, index + count).map((p) => <PlayerCard key={p.playerId} player={p} width={width} color={color} accent={accent} delay={FIRST_DELAY_MS + offset + STEP_MS * index} order={++index} />)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// The theme decides the colour; only a theme that asks for team colours lets each team wear its own.
+const teamColor = (lineup: Lineup, theme: Theme) => (theme.useTeamColors ? (lineup.team.primaryColor ?? theme.primaryColor) : theme.primaryColor)
+
 /**
- * Pre-match "player introduction": the chosen team's playing XI rolls out card by card (4 / 4 / 3).
- * Which team is on air comes from the producer (graphics.TeamLineup.payload.teamId).
+ * Pre-match "player introduction": a team's playing XI rolls out card by card (4 / 4 / 3).
+ * The producer (or scorer) picks one team, or both side by side (graphics.TeamLineup.payload.teamId = team id | "both").
  */
 export function LineupPanel({ state }: { state: MatchState }) {
-  const lineup = selectedLineup(state)
-  if (!lineup) return null
-  const { team, players } = lineup
+  const lineups = selectedLineups(state)
+  if (lineups.length === 0) return null
   const { theme } = state
-  const color = team.primaryColor ?? theme.primaryColor
   const accent = theme.accentColor
-  const sizes = rowSizes(players.length)
-  const width = cardWidth(sizes.length)
-  let index = 0
+  const scrim = 'linear-gradient(180deg, rgba(3,8,25,.9), rgba(3,8,25,.82))'
 
-  return (
-    <div data-testid="lineup-panel" data-team={team.id} style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(3,8,25,.9), rgba(3,8,25,.82))', color: '#fff' }}>
-      <div className="anim-slide-down" style={{ position: 'absolute', left: 60, right: 60, top: 26, height: 96, display: 'flex', alignItems: 'center', gap: 24, padding: '0 28px', borderRadius: 18, background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 45%, #000))`, boxShadow: '0 10px 28px rgba(0,0,0,.5)' }}>
-        <TeamLogo team={team} size={72} />
-        <div className="font-display" style={{ fontSize: 58, fontWeight: 700, letterSpacing: 4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{team.name}</div>
-        <div className="font-display" style={{ fontSize: 40, fontWeight: 600, letterSpacing: 6, color: accent }}>PLAYING XI</div>
-        <div className="font-display" style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 26, lineHeight: 1.15, opacity: 0.95 }}>
-          <div>{state.tournamentName}</div>
-          <div style={{ opacity: 0.8 }}>{state.venueName}</div>
+  if (lineups.length === 1) {
+    const lineup = lineups[0]!
+    const { team, players } = lineup
+    const color = teamColor(lineup, theme)
+    const width = cardWidth(rowSizes(players.length).length)
+    return (
+      <div data-testid="lineup-panel" data-team={team.id} style={{ position: 'absolute', inset: 0, background: scrim, color: '#fff' }}>
+        <div className="anim-slide-down" style={{ position: 'absolute', left: 60, right: 60, top: 26, height: 96, display: 'flex', alignItems: 'center', gap: 24, padding: '0 28px', borderRadius: 18, background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 45%, #000))`, boxShadow: '0 10px 28px rgba(0,0,0,.5)' }}>
+          <TeamLogo team={team} size={72} />
+          <div className="font-display" style={{ fontSize: 58, fontWeight: 700, letterSpacing: 4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{team.name}</div>
+          <div className="font-display" style={{ fontSize: 40, fontWeight: 600, letterSpacing: 6, color: accent }}>PLAYING XI</div>
+          <div className="font-display" style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 26, lineHeight: 1.15, opacity: 0.95 }}>
+            <div>{state.tournamentName}</div>
+            <div style={{ opacity: 0.8 }}>{state.venueName}</div>
+          </div>
+        </div>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 150 }}>
+          <Grid lineup={lineup} width={width} gap={CARD_GAP} color={color} accent={accent} />
         </div>
       </div>
+    )
+  }
 
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 150, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: CARD_GAP, perspective: 1400 }}>
-        {sizes.map((count, row) => (
-          <div key={row} style={{ display: 'flex', gap: CARD_GAP, justifyContent: 'center' }}>
-            {players.slice(index, index + count).map((p) => <PlayerCard key={p.playerId} player={p} width={width} color={color} accent={accent} index={index++} />)}
-          </div>
-        ))}
+  // both teams, side by side
+  const [home, away] = lineups as [Lineup, Lineup]
+  const rows = Math.max(rowSizes(home.players.length).length, rowSizes(away.players.length).length)
+  const width = cardWidthBoth(rows)
+  const side = (lineup: Lineup, offset: number) => {
+    const color = teamColor(lineup, theme)
+    return (
+      <div key={lineup.team.id} data-testid="lineup-column" data-team={lineup.team.id}>
+        <div className="font-display anim-slide-down" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, height: 44, marginBottom: 12, borderRadius: 10, background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 45%, #000))`, fontSize: 30, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+          <TeamLogo team={lineup.team} size={32} />{lineup.team.name}
+        </div>
+        <Grid lineup={lineup} width={width} gap={BOTH_GAP} color={color} accent={accent} offset={offset} />
+      </div>
+    )
+  }
+  return (
+    <div data-testid="lineup-panel" data-team={BOTH} style={{ position: 'absolute', inset: 0, background: scrim, color: '#fff' }}>
+      <div className="anim-slide-down" style={{ position: 'absolute', left: 60, right: 60, top: 26, height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, borderRadius: 18, background: 'linear-gradient(90deg, rgba(15,23,42,.9), rgba(30,41,59,.9), rgba(15,23,42,.9))', border: `2px solid ${accent}`, boxShadow: '0 10px 28px rgba(0,0,0,.5)' }}>
+        <div className="font-display" style={{ fontSize: 56, fontWeight: 700, letterSpacing: 4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{home.team.name}</div>
+        <div className="font-display" style={{ fontSize: 38, fontWeight: 600, letterSpacing: 6, color: accent }}>PLAYING XI</div>
+        <div className="font-display" style={{ fontSize: 56, fontWeight: 700, letterSpacing: 4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{away.team.name}</div>
+      </div>
+      <div style={{ position: 'absolute', left: 60, right: 60, top: 140, display: 'flex', justifyContent: 'space-between' }}>
+        {side(home, 0)}
+        {side(away, STEP_MS / 2)}
       </div>
     </div>
   )

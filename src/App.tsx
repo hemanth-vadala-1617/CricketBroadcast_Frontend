@@ -17,6 +17,7 @@ const ProducerConsole = lazy(() => import('./pages/producer/ProducerConsole'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const MatchesPage = lazy(() => import('./pages/admin/MatchesPage'))
 const MatchHub = lazy(() => import('./pages/admin/MatchHub'))
+const MatchScorecardPage = lazy(() => import('./pages/admin/MatchScorecardPage'))
 const MatchSetupPage = lazy(() => import('./pages/admin/MatchSetupPage'))
 const TeamsPage = lazy(() => import('./pages/admin/TeamsPage'))
 const PlayersPage = lazy(() => import('./pages/admin/PlayersPage'))
@@ -43,6 +44,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="matches" element={<MatchesPage />} />
             <Route path="matches/:matchId" element={<MatchHub />} />
+            <Route path="matches/:matchId/scorecard" element={<MatchScorecardPage />} />
             <Route path="matches/:matchId/setup" element={<RequireAuth roles={SCORING}><MatchSetupPage /></RequireAuth>} />
             <Route path="teams" element={<TeamsPage />} />
             <Route path="players" element={<PlayersPage />} />

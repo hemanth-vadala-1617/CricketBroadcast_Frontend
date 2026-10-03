@@ -3,11 +3,12 @@ import type { MatchState } from '../../lib/types'
 import { BannerBar } from './BannerBar'
 import { BatterCard, CARD_W } from './BatterCard'
 import { BowlerCard } from './BowlerCard'
-import { EventBurst } from './EventBurst'
+import { BOX_AFTER_BURST_MS, EventBurst } from './EventBurst'
 import { FullScorecardPanel } from './FullScorecardPanel'
 import { InfoCard } from './InfoCard'
 import { LineupPanel } from './LineupPanel'
-import { selectedLineup } from './lineup'
+import { NewBatterCard, useNewBatter } from './NewBatterCard'
+import { selectedLineups } from './lineup'
 import { Presence } from './OverlayBits'
 import { Scorebug } from './Scorebug'
 import { TimelineBar } from './TimelineBar'
@@ -28,6 +29,7 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
   const showScorebug = !!innings && graphics.Scorebug.isVisible
   const showWin = graphics.WinProbability.isVisible && state.winProbability.home + state.winProbability.draw + state.winProbability.away > 0
   const bg = assetUrl(state.backgroundUrl)
+  const { shown: newBatter, held } = useNewBatter(state, inPlay)
 
   const canvasBg = showBackground
     ? { background: bg ? `center / cover url(${bg})` : 'linear-gradient(180deg, #14532d 0%, #166534 45%, #3f6212 100%)' }
@@ -46,7 +48,7 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
       >
         {/* Scorebug (+ win probability tucked into strip 2) */}
         <Presence show={showScorebug} enter="down">
-          <Scorebug state={state} winProb={showWin ? <WinProbabilityStrip state={state} /> : undefined} />
+          <Scorebug state={state} winProb={showWin ? <WinProbabilityStrip state={state} /> : undefined} boxDelayMs={inPlay ? BOX_AFTER_BURST_MS : 0} />
         </Presence>
         {!showScorebug && (
           <Presence show={showWin} enter="down">
@@ -60,8 +62,8 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
         <Presence show={inPlay && graphics.BatterCards.isVisible && !!innings && (!!innings.striker || !!innings.nonStriker)} enter="up">
           {innings && (
             <div style={{ position: 'absolute', left: 40, bottom: 112, display: 'flex', gap: 20 }}>
-              {innings.striker && <BatterCard batter={innings.striker} team={innings.battingTeam} theme={theme} />}
-              {innings.nonStriker && <BatterCard batter={innings.nonStriker} team={innings.battingTeam} theme={theme} />}
+              {(held?.slot === 'striker' || innings.striker) && <BatterCard batter={held?.slot === 'striker' ? held.batter : innings.striker!} team={innings.battingTeam} theme={theme} out={held?.slot === 'striker' ? held.label : undefined} detail={held?.slot === 'striker' ? held.detail : undefined} />}
+              {(held?.slot === 'nonStriker' || innings.nonStriker) && <BatterCard batter={held?.slot === 'nonStriker' ? held.batter : innings.nonStriker!} team={innings.battingTeam} theme={theme} out={held?.slot === 'nonStriker' ? held.label : undefined} detail={held?.slot === 'nonStriker' ? held.detail : undefined} />}
             </div>
           )}
         </Presence>
@@ -75,13 +77,14 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
 
         <Presence show={inPlay && graphics.Timeline.isVisible} enter="up"><TimelineBar state={state} /></Presence>
 
-        {/* Channel watermark */}
-        {(theme.watermarkUrl || theme.watermarkText || theme.logoUrl) && (
+        {/* Channel watermark: a logo sits bottom right; a text tag (LIVE) sits top right, just above the scorebug, as on TV */}
+        {(theme.watermarkUrl || theme.logoUrl) && (
           <div style={{ position: 'absolute', right: 40, bottom: 112, maxWidth: 150, textAlign: 'center' }}>
-            {theme.watermarkUrl || theme.logoUrl
-              ? <img src={assetUrl(theme.watermarkUrl ?? theme.logoUrl)} alt="" style={{ maxWidth: 140, maxHeight: 90, objectFit: 'contain', opacity: 0.9 }} />
-              : <span className="font-display" style={{ fontSize: 30, fontWeight: 700, letterSpacing: 3, color: '#fff', background: '#dc2626', padding: '2px 14px', borderRadius: 6 }}>{theme.watermarkText}</span>}
+            <img src={assetUrl(theme.watermarkUrl ?? theme.logoUrl)} alt="" style={{ maxWidth: 140, maxHeight: 90, objectFit: 'contain', opacity: 0.9 }} />
           </div>
+        )}
+        {!theme.watermarkUrl && !theme.logoUrl && theme.watermarkText && (
+          <span data-testid="watermark-tag" className="font-display" style={{ position: 'absolute', right: 40, top: 0, height: 26, display: 'flex', alignItems: 'center', fontSize: 20, fontWeight: 700, letterSpacing: 3, color: '#fff', background: '#dc2626', padding: '0 14px', borderRadius: '0 0 6px 6px' }}>{theme.watermarkText}</span>
         )}
 
         {/* States without live play */}
@@ -93,12 +96,16 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
         {finished && <InfoCard title={status === 'Abandoned' ? 'Match abandoned' : 'Full time'} accent={theme.accentColor} lines={[state.resultText ?? '', ...summaryLines(state)]} />}
 
         <Presence show={graphics.FullScorecard.isVisible && state.scorecard.length > 0} enter="pop"><FullScorecardPanel state={state} /></Presence>
-        {/* Pre-match player introduction: shows in any match state, before or during play */}
-        <Presence show={selectedLineup(state) !== null} enter="up"><LineupPanel state={state} /></Presence>
 
+        {/* Stacking order, bottom to top. Later = in front: the banner stays BEHIND the player introduction,
+            and the big FOUR / SIX / OUT / NO BALL / WIDE / PENALTY bursts are in front of everything. */}
         <Presence show={graphics.Banner.isVisible} enter="up"><BannerBar state={state} /></Presence>
 
-        {/* FOUR / SIX / OUT / NO BALL / WIDE full-screen bursts, one per new ball */}
+        {/* Pre-match player introduction: shows in any match state, before or during play */}
+        <Presence show={selectedLineups(state).length > 0} enter="up"><LineupPanel state={state} /></Presence>
+
+        {inPlay && newBatter && <NewBatterCard key={newBatter.playerId} batter={newBatter} state={state} />}
+
         {inPlay && <EventBurst state={state} />}
       </div>
     </div>

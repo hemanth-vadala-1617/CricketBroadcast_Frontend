@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ChangeEvent, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { Loader2, Search, Upload, X } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ChangeEvent, type InputHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { createPortal } from 'react-dom'
+import { Loader2, MoreVertical, Search, Upload, X } from 'lucide-react'
 import { cn, assetUrl, caretAfterDigits, contrastText, formatIndianNumber, initials, parseWholeNumber } from '../lib/utils'
 import { api, errorMessage } from '../lib/api'
 import { CROP_PRESETS, type CropPresetName } from '../lib/cropImage'
@@ -337,3 +338,120 @@ export function Table({ head, children }: { head: ReactNode; children: ReactNode
 }
 export const Th = ({ children, className }: { children?: ReactNode; className?: string }) => <th className={cn('px-4 py-3 font-semibold', className)}>{children}</th>
 export const Td = ({ children, className }: { children?: ReactNode; className?: string }) => <td className={cn('px-4 py-3 align-middle', className)}>{children}</td>
+
+// ---------- three-dots action menu ----------
+export interface ActionMenuItem {
+  label: string
+  icon?: ReactNode
+  onSelect?: () => void
+  danger?: boolean
+  hidden?: boolean
+}
+
+const MENU_ITEM_H = 40
+const MENU_PAD = 8
+
+// One menu for every list row (View / Edit / Delete ...). The popup is portalled to <body> with fixed
+// positioning, so a table's overflow-x-auto can never clip it, and it flips upward near the screen bottom.
+export function ActionMenu({ label, items }: { label: string; items: ActionMenuItem[] }) {
+  const visible = items.filter((i) => !i.hidden)
+  const [open, setOpen] = useState(false)
+  const [place, setPlace] = useState<{ right: number; top?: number; bottom?: number } | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
+  const count = visible.length
+
+  const close = useCallback((refocus: boolean) => {
+    setOpen(false)
+    if (refocus) button.current?.focus()
+  }, [])
+
+  function toggle() {
+    if (open) return close(true)
+    const rect = button.current?.getBoundingClientRect()
+    if (!rect) return
+    const height = count * MENU_ITEM_H + MENU_PAD
+    const flip = window.innerHeight - rect.bottom < height + 8 && rect.top > height + 8
+    const right = Math.max(8, window.innerWidth - rect.right)
+    setPlace(flip ? { right, bottom: window.innerHeight - rect.top + 4 } : { right, top: rect.bottom + 4 })
+    setOpen(true)
+  }
+
+  // while open: Escape closes only this menu (it sits on top of the shared dialog stack), outside click,
+  // scrolling or resizing closes it, and the first item takes focus
+  useEffect(() => {
+    if (!open) return
+    const token = Symbol('menu')
+    openModals.push(token)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && openModals[openModals.length - 1] === token) close(true)
+    }
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (!menu.current?.contains(t) && !button.current?.contains(t)) close(false)
+    }
+    const away = () => close(false)
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('resize', away)
+    window.addEventListener('scroll', away, true)
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('resize', away)
+      window.removeEventListener('scroll', away, true)
+      openModals.splice(openModals.indexOf(token), 1)
+    }
+  }, [open, close])
+
+  function onMenuKey(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const nodes = Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+    const at = nodes.indexOf(document.activeElement as HTMLElement)
+    const go = (i: number) => { e.preventDefault(); nodes[(i + nodes.length) % nodes.length]?.focus() }
+    if (e.key === 'ArrowDown') go(at + 1)
+    else if (e.key === 'ArrowUp') go(at - 1)
+    else if (e.key === 'Home') go(0)
+    else if (e.key === 'End') go(nodes.length - 1)
+    else if (e.key === 'Tab') close(false)
+  }
+
+  if (count === 0) return null
+  return (
+    <>
+      <button
+        ref={button} type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={toggle}
+        onKeyDown={(e) => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); toggle() } }}
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      >
+        <MoreVertical className="size-5" aria-hidden />
+      </button>
+      {open && place && createPortal(
+        <div
+          ref={menu} role="menu" aria-label={label} onKeyDown={onMenuKey}
+          style={{ position: 'fixed', right: place.right, top: place.top, bottom: place.bottom }}
+          className="z-[70] min-w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+        >
+          {visible.map((item) => (
+            <button
+              key={item.label} type="button" role="menuitem" tabIndex={-1}
+              onClick={() => { close(true); item.onSelect?.() }}
+              className={cn('flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium outline-none hover:bg-slate-100 focus:bg-slate-100', item.danger ? 'text-red-600' : 'text-slate-700')}
+            >
+              {item.icon}{item.label}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+// Long text kept to ONE line with an ellipsis; hovering (or keyboard focus) shows the full text in a tooltip.
+// Use it in table cells so a long tournament or venue name never turns a row into a tall column of words.
+export function Truncate({ text, max = 'max-w-[12rem]', className, empty = '—', focusable = true }: { text: string | null | undefined; max?: string; className?: string; empty?: string; focusable?: boolean }) {
+  const value = text?.trim()
+  if (!value) return <span className="text-slate-400">{empty}</span>
+  return <span title={value} tabIndex={focusable ? 0 : undefined} className={cn('block truncate rounded-sm focus-visible:outline-2 focus-visible:outline-brand', max, className)}>{value}</span>
+}

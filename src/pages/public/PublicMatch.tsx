@@ -5,7 +5,7 @@ import { useLiveMatch } from '../../hooks/useLiveMatch'
 import type { BallChip, MatchState } from '../../lib/types'
 import { chipColors } from '../../components/overlay/chipColors'
 import { Avatar, Badge, Card, Spinner, StatusBadge, TeamBadge } from '../../components/ui'
-import ScorecardView from './ScorecardView'
+import MatchScorecard from '../../components/MatchScorecard'
 
 function Chip({ chip }: { chip: BallChip }) {
   const c = chipColors[chip.kind]
@@ -111,12 +111,7 @@ export default function PublicMatch() {
             <button key={t} role="tab" type="button" aria-selected={tab === t} onClick={() => setTab(t)} className={`rounded-lg px-4 py-2 text-sm font-semibold capitalize ${tab === t ? 'bg-brand text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>{t}</button>
           ))}
         </div>
-        {tab === 'summary' ? <Summary state={state} /> : (
-          <div className="flex flex-col gap-4">
-            {state.scorecard.length === 0 && <Card className="p-6 text-center text-slate-600">No innings yet.</Card>}
-            {[...state.scorecard].reverse().map((c) => <ScorecardView key={c.inningsNumber} card={c} />)}
-          </div>
-        )}
+        {tab === 'summary' ? <Summary state={state} /> : <MatchScorecard state={state} />}
       </main>
     </div>
   )

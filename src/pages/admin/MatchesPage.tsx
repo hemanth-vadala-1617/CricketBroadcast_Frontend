@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, ListChecks, Pencil, Play, Plus, Radio, Trash2 } from 'lucide-react'
-import { Button, Field, FilterBar, Input, PageHeader, SearchBox, Select, StatusBadge, Table, TeamBadge, Td, Th } from '../../components/ui'
-import { api, errorMessage } from '../../lib/api'
+import { Link } from 'react-router-dom'
+import { ClipboardList, ExternalLink, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Button, Field, FilterBar, Input, PageHeader, SearchBox, Select, StatusBadge, Table, TeamBadge, Td, Th, Truncate } from '../../components/ui'
+import { errorMessage } from '../../lib/api'
 import type { MatchStatus, MatchSummary } from '../../lib/types'
 import { formatDateTime } from '../../lib/utils'
 import { keys, useCreateMatch, useMatches, useRules, useTeams, useThemes, useTournaments, useVenues } from '../../hooks/queries'
 import { toast } from '../../store/useToast'
-import { SCORING, useAuthStore } from '../../store/useAuthStore'
 import { nextStep } from './nextStep'
+import { rowClick } from './rowClick'
+import MatchViewModal from './MatchViewModal'
 import { DeleteDialog, EntityModal, FormGrid, ListCard } from './AdminKit'
 import { useDebounced, useDeleteFlow, useIsAdmin } from './adminHooks'
 import { applyTournament, emptyMatchForm, fromSummary, toCreateInput, validateMatchForm, type MatchFormValues } from './matchForm'
@@ -18,31 +18,6 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'live', label: 'Live now' }, { value: 'Scheduled', label: 'Scheduled' }, { value: 'TossCompleted', label: 'Toss done' },
   { value: 'Completed', label: 'Completed' }, { value: 'Abandoned', label: 'Abandoned' },
 ]
-
-/** The one thing to do next for this match: set it up, start it, or score it. */
-function NextStepButton({ m }: { m: MatchSummary }) {
-  const canRun = useAuthStore((s) => s.hasRole(...SCORING))
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const [starting, setStarting] = useState(false)
-  const step = nextStep(m)
-  if (!canRun || step.kind === 'none') return null
-
-  async function start() {
-    setStarting(true)
-    try {
-      await api.post(`/api/matches/${m.id}/start`)
-      void qc.invalidateQueries({ queryKey: keys.matches })
-      toast.success('Match is live.')
-      navigate(`/scorer/${m.id}`)
-    } catch (e) { toast.error(errorMessage(e)) } finally { setStarting(false) }
-  }
-
-  const cls = 'inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white'
-  if (step.kind === 'start') return <Button size="sm" variant="success" loading={starting} onClick={() => void start()}><Play className="size-3.5" aria-hidden />{step.label}</Button>
-  if (step.kind === 'score') return <Link to={`/scorer/${m.id}`} className={`${cls} bg-emerald-600 hover:bg-emerald-700`}><Radio className="size-3.5" aria-hidden />{step.label}</Link>
-  return <Link to={`/admin/matches/${m.id}/setup`} className={`${cls} bg-amber-500 hover:bg-amber-600`}><ListChecks className="size-3.5" aria-hidden />{step.label}</Link>
-}
 
 function MatchModal({ match, onClose }: { match: MatchSummary | null; onClose: () => void }) {
   const tournaments = useTournaments()
@@ -134,6 +109,7 @@ export default function MatchesPage() {
   const [status, setStatus] = useState('')
   const [tournamentId, setTournamentId] = useState('')
   const [editing, setEditing] = useState<MatchSummary | 'new' | null>(null)
+  const [viewing, setViewing] = useState<MatchSummary | null>(null)
   const debounced = useDebounced(search)
   const tournaments = useTournaments()
   const matches = useMatches({ search: debounced, status, tournamentId })
@@ -160,27 +136,33 @@ export default function MatchesPage() {
       <ListCard loading={matches.isLoading} error={matches.error ? errorMessage(matches.error) : null} onRetry={() => void matches.refetch()}
         isEmpty={rows.length === 0} emptyTitle={filtered ? 'No matches match these filters.' : 'No matches yet.'}
         emptyHint={filtered ? undefined : 'Schedule your first match. You need a tournament, two teams, a venue and match rules.'}>
-        <Table head={<tr><Th>Match</Th><Th>Tournament</Th><Th>Venue</Th><Th>Start</Th><Th>Status</Th><Th className="text-right">Actions</Th></tr>}>
+        {/* min width keeps every column readable; narrower screens get a horizontal scroller instead of squeezed rows */}
+        <div className="[&_table]:min-w-[980px]">
+        <Table head={<tr><Th>Match</Th><Th>Tournament</Th><Th>Venue</Th><Th>Start</Th><Th>Status</Th><Th className="text-center">Open</Th></tr>}>
           {rows.map((m) => (
-            <tr key={m.id} className="hover:bg-slate-50">
+            <tr key={m.id} className="cursor-pointer hover:bg-slate-50" onClick={rowClick(() => setViewing(m))}>
               <Td>
                 <div className="flex items-center gap-2 font-semibold text-slate-900">
                   <TeamBadge team={{ name: m.homeTeamName, shortName: m.homeShortName, logoUrl: null, primaryColor: null }} size={26} />
-                  {m.homeTeamName} <span className="text-xs font-medium text-slate-400">vs</span> {m.awayTeamName}
+                  <Truncate text={m.homeTeamName} max="max-w-[8rem]" />
+                  <span className="text-xs font-medium text-slate-400">vs</span>
+                  <Truncate text={m.awayTeamName} max="max-w-[8rem]" />
                   <TeamBadge team={{ name: m.awayTeamName, shortName: m.awayShortName, logoUrl: null, primaryColor: null }} size={26} />
                 </div>
-                {m.resultText && <div className="mt-0.5 text-xs text-slate-500">{m.resultText}</div>}
+                {m.resultText && <Truncate text={m.resultText} max="max-w-[16rem]" className="mt-0.5 text-xs text-slate-500" />}
               </Td>
-              <Td>{m.tournamentName}</Td>
-              <Td>{m.venueName}</Td>
+              <Td><Truncate text={m.tournamentName} max="max-w-[11rem]" /></Td>
+              <Td><Truncate text={m.venueName} max="max-w-[10rem]" /></Td>
               <Td className="whitespace-nowrap text-xs">{formatDateTime(m.scheduledStart)}</Td>
               <Td>
                 <StatusBadge status={m.status as MatchStatus} />
-                {(m.status === 'Scheduled' || m.status === 'TossCompleted') && <p className={`mt-1 max-w-48 text-xs ${nextStep(m).overdue ? 'font-semibold text-amber-700' : 'text-slate-500'}`}>{nextStep(m).hint}</p>}
+                {(m.status === 'Scheduled' || m.status === 'TossCompleted') && <Truncate text={nextStep(m).hint} max="max-w-[11rem]" className={`mt-1 text-xs ${nextStep(m).overdue ? 'font-semibold text-amber-700' : 'text-slate-500'}`} />}
               </Td>
-              <Td className="text-right">
-                <span className="mr-1 inline-block"><NextStepButton m={m} /></span>
+              {/* open the match page (set up, start, score live there), its scorecard, and (before it starts) edit / delete */}
+              <Td className="whitespace-nowrap text-center">
+                <Button size="sm" variant="ghost" aria-label={`View ${m.title}`} onClick={() => setViewing(m)}><Eye className="size-4" /></Button>
                 <Link to={`/admin/matches/${m.id}`} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-emerald-50"><ExternalLink className="size-3.5" aria-hidden />Open</Link>
+                <Link to={`/admin/matches/${m.id}/scorecard`} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-emerald-50"><ClipboardList className="size-3.5" aria-hidden />Scorecard</Link>
                 {isAdmin && m.status === 'Scheduled' && (
                   <>
                     <Button size="sm" variant="ghost" aria-label={`Edit ${m.title}`} onClick={() => setEditing(m)}><Pencil className="size-4" /></Button>
@@ -191,7 +173,9 @@ export default function MatchesPage() {
             </tr>
           ))}
         </Table>
+        </div>
       </ListCard>
+      {viewing && <MatchViewModal key={viewing.id} match={viewing} onClose={() => setViewing(null)} />}
       {editing && <MatchModal key={editing === 'new' ? 'new' : editing.id} match={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
       <DeleteDialog flow={del} noun="match" extra="Only a match that has not started can be deleted." />
     </>

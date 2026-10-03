@@ -26,13 +26,23 @@ export function cardName(p: LineupPlayer): { first: string; last: string } {
   return { first: parts.length > 1 ? parts.slice(0, -1).join(' ') : '', last: (parts.at(-1) ?? '') + roleSuffix(p) }
 }
 
-/** Which team the producer put on air (graphics.TeamLineup.payload.teamId), or null. */
-export function selectedLineup(state: MatchState): Lineup | null {
+// payload.teamId value that puts both playing XIs on screen side by side.
+export const BOTH = 'both'
+
+/** The lineups on air: [one team], [home, away] for "both", or [] when nothing is on air. */
+export function selectedLineups(state: MatchState): Lineup[] {
   const g = state.graphics.TeamLineup
   const id = g?.isVisible ? (g.payload?.teamId as string | undefined) : undefined
-  if (!id || !state.lineups) return null
-  const found = [state.lineups.home, state.lineups.away].find((l) => l.team.id === id)
-  return found && found.players.length > 0 ? found : null
+  if (!id || !state.lineups) return []
+  const teams = [state.lineups.home, state.lineups.away].filter((l) => l.players.length > 0)
+  if (id === BOTH) return teams
+  return teams.filter((l) => l.team.id === id)
+}
+
+/** The single team on air (null when nothing, or both teams, are on air). */
+export function selectedLineup(state: MatchState): Lineup | null {
+  const l = selectedLineups(state)
+  return l.length === 1 ? l[0]! : null
 }
 
 const GAP = 22
@@ -45,6 +55,17 @@ export function cardWidth(rows: number): number {
   return Math.min(rows === 1 ? 320 : 300, fit)
 }
 export const CARD_GAP = GAP
+
+// Both teams at once: two grids of 4 columns side by side, so the cards are smaller than for one team.
+export const BOTH_GAP = 14
+const BOTH_AREA_H = 864          // 1080 minus the header and the team labels
+const BOTH_SIDE_W = 880          // (1920 - 2 * 60 margin - 40 between) / 2
+export function cardWidthBoth(rows: number): number {
+  if (rows <= 0) return 0
+  const byHeight = Math.floor((BOTH_AREA_H - (rows - 1) * BOTH_GAP) / rows / 1.46)
+  const byWidth = Math.floor((BOTH_SIDE_W - 3 * BOTH_GAP) / 4)
+  return Math.min(byHeight, byWidth, 230)
+}
 
 /** Largest font (<= max) that keeps `text` inside `width` px (display font is about 0.52em per capital). */
 export function fitFont(text: string, width: number, max: number): number {

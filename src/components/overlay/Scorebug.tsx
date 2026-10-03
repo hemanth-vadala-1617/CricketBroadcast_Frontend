@@ -1,41 +1,7 @@
-﻿import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { BallKind, MatchState } from '../../lib/types'
+import type { ReactNode } from 'react'
+import type { MatchState } from '../../lib/types'
 import { BatIcon, TeamLogo } from './OverlayBits'
-
-const HIGHLIGHT_MS = 5000
-const kindBg: Partial<Record<BallKind, string>> = {
-  Four: '#16a34a', Six: '#7e22ce', Wicket: '#dc2626', Wide: '#d97706', NoBall: '#d97706',
-}
-
-/** Centre box: last-ball result. Pops and takes the event colour for ~5 s whenever a NEW ball arrives. */
-export function LastBallBox({ state }: { state: MatchState }) {
-  const ball = state.lastBall
-  const seen = useRef<string | null>(ball?.ballId ?? null)
-  const [highlight, setHighlight] = useState(false)
-
-  useEffect(() => {
-    const id = ball?.ballId ?? null
-    if (id === seen.current) return
-    seen.current = id
-    if (!id) { setHighlight(false); return }
-    setHighlight(true)
-    const t = setTimeout(() => setHighlight(false), HIGHLIGHT_MS)
-    return () => clearTimeout(t)
-  }, [ball?.ballId])
-
-  const bg = highlight && ball ? kindBg[ball.kind] ?? '#111827' : '#05070b'
-  return (
-    <div
-      key={highlight ? ball?.ballId : 'idle'}
-      data-testid="last-ball"
-      data-highlight={highlight ? 'true' : 'false'}
-      className={highlight ? 'anim-pop' : undefined}
-      style={{ width: 320, height: 118, borderRadius: 16, background: bg, border: '4px solid rgba(255,255,255,.18)', display: 'grid', placeItems: 'center', margin: '0 12px', transition: 'background .3s' }}
-    >
-      <span className="font-display" style={{ fontSize: ball && ball.label.length > 3 ? 64 : 96, fontWeight: 700, color: '#fde047', lineHeight: 1 }}>{ball ? ball.label : '–'}</span>
-    </div>
-  )
-}
+import { LastBallBox } from './LastBallBox'
 
 function darken(hex: string) {
   return `color-mix(in srgb, ${hex} 55%, #000)`
@@ -44,16 +10,16 @@ function darken(hex: string) {
 const chip = (bg: string, fg = '#fff') => ({ background: bg, color: fg, borderRadius: 8, padding: '2px 14px', fontWeight: 700, letterSpacing: 1 } as const)
 
 /** Top bar + the two info strips (the TV scorebug from the reference). */
-export function Scorebug({ state, winProb }: { state: MatchState; winProb?: ReactNode }) {
+export function Scorebug({ state, winProb, boxDelayMs = 0 }: { state: MatchState; winProb?: ReactNode; boxDelayMs?: number }) {
   const inn = state.innings
   if (!inn) return null
   const { theme } = state
   const bat = inn.battingTeam
   const bowl = inn.bowlingTeam
   const previous = state.previousInnings
-  // each side wears its own team colour (as on the TV graphic); the theme colours are only the fallback
-  const batColor = bat.primaryColor ?? theme.primaryColor
-  const bowlColor = bowl.primaryColor ?? theme.secondaryColor
+  // The theme decides. Only when it asks for team colours does each bar wear its own team colour (the theme colour is then the fallback).
+  const batColor = theme.useTeamColors ? (bat.primaryColor ?? theme.primaryColor) : theme.primaryColor
+  const bowlColor = theme.useTeamColors ? (bowl.primaryColor ?? theme.primaryColor) : theme.primaryColor
 
   return (
     <div data-testid="scorebug" style={{ position: 'absolute', left: 40, top: 28, width: 1840, color: '#fff' }}>
@@ -74,7 +40,7 @@ export function Scorebug({ state, winProb }: { state: MatchState; winProb?: Reac
           <BatIcon size={44} />
         </div>
 
-        <LastBallBox state={state} />
+        <LastBallBox state={state} delayMs={boxDelayMs} />
 
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 20, padding: '0 14px 0 24px', borderRadius: '0 66px 0 0', background: `linear-gradient(270deg, ${darken(bowlColor)}, ${bowlColor})` }}>
           <div style={{ minWidth: 0, flex: 1, textAlign: 'right' }}>

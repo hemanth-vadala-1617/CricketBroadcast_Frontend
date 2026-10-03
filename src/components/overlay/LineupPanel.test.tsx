@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { BroadcastOverlay } from './BroadcastOverlay'
 import { LineupPanel } from './LineupPanel'
 import { indiaXI, lineupOf, lineupState, referenceState, withGraphics } from './fixtures'
-import { cardName, cardWidth, fitFont, roleSuffix, rowSizes, selectedLineup } from './lineup'
-import type { LineupPlayer } from '../../lib/types'
+import { BOTH_GAP, cardName, cardWidth, cardWidthBoth, fitFont, roleSuffix, rowSizes, selectedLineup, selectedLineups } from './lineup'
+import type { LineupPlayer, MatchState } from '../../lib/types'
 
 const player = (over: Partial<LineupPlayer>): LineupPlayer =>
   ({ playerId: 'x', firstName: '', lastName: '', displayName: '', photoUrl: null, isCaptain: false, isWicketKeeper: false, battingOrder: 1, ...over })
@@ -147,5 +147,78 @@ describe('in the broadcast overlay', () => {
 describe('fixture sanity', () => {
   it('the India XI matches the reference picture', () => {
     expect(indiaXI().map((p) => p.lastName)).toEqual(['Sharma', 'Kishan', 'Varma', 'Yadav', 'Pandya', 'Dube', 'Singh', 'Patel', 'Singh', 'Bumrah', 'Chakravarthy'])
+  })
+})
+
+// ---- both teams side by side ----
+const both = (): MatchState => {
+  const s = lineupState()
+  const awayXI = indiaXI().map((p) => ({ ...p, playerId: `a-${p.playerId}`, firstName: `A${p.firstName}`, lastName: `Z${p.lastName}` }))
+  return { ...s, lineups: { home: s.lineups.home, away: lineupOf(s.awayTeam, awayXI) }, graphics: { ...s.graphics, TeamLineup: { isVisible: true, payload: { teamId: 'both' } } } }
+}
+
+describe('both teams together', () => {
+  it('selectedLineups returns one team, both teams, or nothing', () => {
+    expect(selectedLineups(lineupState()).map((l) => l.team.id)).toEqual(['ind'])
+    expect(selectedLineups(both()).map((l) => l.team.id)).toEqual(['ind', both().awayTeam.id])
+    expect(selectedLineups(withGraphics(both(), { TeamLineup: false }))).toEqual([])
+    expect(selectedLineups(referenceState())).toEqual([])
+  })
+
+  it('"both" with only one team picked falls back to showing that team alone', () => {
+    const s = lineupState()                                                  // home: 11 players, away: 1
+    const oneEmpty = { ...s, lineups: { ...s.lineups, away: lineupOf(s.awayTeam, []) }, graphics: { ...s.graphics, TeamLineup: { isVisible: true, payload: { teamId: 'both' } } } }
+    expect(selectedLineups(oneEmpty)).toHaveLength(1)
+    expect(selectedLineup(oneEmpty)?.team.id).toBe('ind')
+    expect(selectedLineup(both())).toBeNull()                                // two teams are not "the single team"
+  })
+
+  it('cards are smaller than for one team, and two full grids always fit the canvas', () => {
+    for (const rows of [1, 2, 3]) {
+      const w = cardWidthBoth(rows)
+      expect(rows * w * 1.46 + (rows - 1) * BOTH_GAP).toBeLessThanOrEqual(864)       // height under the header
+      expect(4 * w + 3 * BOTH_GAP).toBeLessThanOrEqual(880)                          // each side gets half the width
+    }
+    expect(cardWidthBoth(3)).toBeLessThan(cardWidth(3))
+  })
+
+  it('shows 22 cards, 11 per team in two labelled columns', () => {
+    render(<LineupPanel state={both()} />)
+    expect(screen.getByTestId('lineup-panel')).toHaveAttribute('data-team', 'both')
+    expect(screen.getAllByTestId('lineup-card')).toHaveLength(22)
+    const columns = screen.getAllByTestId('lineup-column')
+    expect(columns).toHaveLength(2)
+    expect(within(columns[0]!).getAllByTestId('lineup-card')).toHaveLength(11)
+    expect(within(columns[1]!).getAllByTestId('lineup-card')).toHaveLength(11)
+    expect(within(columns[0]!).getByText('India')).toBeInTheDocument()                // the team name above its own column
+    expect(within(columns[1]!).getByText(both().awayTeam.name)).toBeInTheDocument()
+    expect(screen.getByText('PLAYING XI')).toBeInTheDocument()
+  })
+
+  it('each column is a 4 / 4 / 3 grid and the cards are the same size on both sides', () => {
+    render(<LineupPanel state={both()} />)
+    for (const col of screen.getAllByTestId('lineup-column')) {
+      const rows = [...new Set(within(col).getAllByTestId('lineup-card').map((c) => c.parentElement!))]
+      expect(rows.map((r) => within(r).getAllByTestId('lineup-card').length)).toEqual([4, 4, 3])
+    }
+    const widths = new Set(screen.getAllByTestId('lineup-card').map((c) => (c as HTMLElement).style.width))
+    expect(widths.size).toBe(1)
+    expect([...widths][0]).toBe(`${cardWidthBoth(3)}px`)
+  })
+
+  it('both teams roll out at once, the away side a fraction later so they do not move in lockstep', () => {
+    render(<LineupPanel state={both()} />)
+    const [home, away] = screen.getAllByTestId('lineup-column').map((c) => within(c).getAllByTestId('lineup-card').map((k) => Number(k.getAttribute('data-delay'))))
+    expect(home![0]).toBe(450)                                                // both start straight away ...
+    expect(away![0]).toBeGreaterThan(home![0]!)                               // ... the away side just behind
+    expect(away![0]! - home![0]!).toBeLessThan(170)                           // less than one card step: still together
+    for (let i = 1; i < 11; i++) { expect(home![i]!).toBeGreaterThan(home![i - 1]!); expect(away![i]!).toBeGreaterThan(away![i - 1]!) }
+    expect(Math.max(...away!)).toBeLessThan(3000)                             // the whole thing is on screen within about 2.5 s
+  })
+
+  it('works inside the overlay and sits in front of the banner', () => {
+    render(<BroadcastOverlay state={both()} />)
+    expect(screen.getByTestId('lineup-panel')).toHaveAttribute('data-team', 'both')
+    expect(screen.getAllByTestId('lineup-card')).toHaveLength(22)
   })
 })

@@ -21,15 +21,15 @@ export function referenceState(overrides: Partial<MatchState> = {}): MatchState 
   return {
     matchId: 'm1', version: 10, title: 'Bangladesh v Australia', format: 'TEST', isTest: true, status: 'Live',
     resultText: null, resultType: null, tournamentName: 'Test Series', venueName: 'Mirpur', backgroundUrl: null,
-    theme: { primaryColor: '#0f6b4f', secondaryColor: '#7a1fa2', accentColor: '#ffd400', logoUrl: null, watermarkUrl: null, watermarkText: null },
+    theme: { primaryColor: '#0f6b4f', secondaryColor: '#7a1fa2', accentColor: '#ffd400', logoUrl: null, watermarkUrl: null, watermarkText: null, useTeamColors: false },
     homeTeam: aus, awayTeam: ban, tossText: 'Australia won the toss and chose to bowl', ballsPerOver: 6, oversPerInnings: 0,
     innings: {
       inningsId: 'i2', inningsNumber: 2, status: 'InProgress', isFollowOn: false, battingTeam: ban, bowlingTeam: aus,
       runs: 355, wickets: 7, overs: '114.1', legalBalls: 685, currentRunRate: 3.11, extras: 12,
       target: null, runsRequired: null, ballsRemaining: null, requiredRunRate: null, projectedScore: 0,
       leadText: 'BAN lead by 157 runs', leadRuns: 157, partnership: { runs: 1, balls: 2 }, freeHit: false, powerplay: false, newBallDue: false,
-      striker: { playerId: 'p1', name: 'Mehidy Hasan', shortName: 'M Hasan', photoUrl: null, runs: 34, balls: 80, fours: 3, sixes: 0, strikeRate: 42.5, onStrike: true },
-      nonStriker: { playerId: 'p2', name: 'Taijul Islam', shortName: 'T Islam', photoUrl: null, runs: 1, balls: 2, fours: 0, sixes: 0, strikeRate: 50, onStrike: false },
+      striker: { playerId: 'p1', name: 'Mehidy Hasan', shortName: 'M Hasan', photoUrl: null, runs: 34, balls: 80, fours: 3, sixes: 0, strikeRate: 42.5, onStrike: true, firstName: 'Mehidy', lastName: 'Hasan', jerseyNumber: 7, battingStyle: 'Right-hand bat', career: null },
+      nonStriker: { playerId: 'p2', name: 'Taijul Islam', shortName: 'T Islam', photoUrl: null, runs: 1, balls: 2, fours: 0, sixes: 0, strikeRate: 50, onStrike: false, firstName: 'Taijul', lastName: 'Islam', jerseyNumber: 0, battingStyle: '', career: null },
       bowler: { playerId: 'p3', name: 'Pat Cummins', shortName: 'P Cummins', photoUrl: null, overs: '22.1', maidens: 5, runs: 52, wickets: 1, economy: 2.35 },
     },
     previousInnings: [{ inningsNumber: 1, teamShortName: 'AUS', runs: 198, wickets: 10, overs: '70.2', isDeclared: false, text: '1st Inng.: 198-10' }],
@@ -84,7 +84,7 @@ export function lineupState(overrides: Partial<MatchState> = {}): MatchState {
   const ind = team('ind', 'India', 'IND', '#1d4ed8')
   return {
     ...base, status: 'TossCompleted', innings: null, lastBall: null, timeline: [], testClock: null,
-    homeTeam: ind, awayTeam: base.awayTeam,
+    homeTeam: ind, awayTeam: base.awayTeam, theme: { ...base.theme, useTeamColors: true },
     lineups: { home: lineupOf(ind, indiaXI()), away: lineupOf(base.awayTeam, [p(21, 'Travis', 'Head')]) },
     graphics: { ...allGraphics(), TeamLineup: { isVisible: true, payload: { teamId: 'ind' } } },
     ...overrides,
