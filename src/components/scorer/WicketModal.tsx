@@ -1,23 +1,21 @@
-﻿import { useState } from 'react'
-import { Button, Field, Modal, Select } from '../ui'
+import { useState } from 'react'
+import { Avatar, Button, Field, Modal, Select } from '../ui'
 import { cn } from '../../lib/utils'
 import { canNonStrikerBeOut, DISMISSALS, fielderNeed, isDismissalAllowed, validateWicket, type PadAction } from '../../pages/scorer/buildRequest'
 import type { DismissalType, ExtrasType, MatchState } from '../../lib/types'
 
 type Wicket = Extract<PadAction, { kind: 'wicket' }>
 
-export default function WicketModal({ state, onClose, onSubmit, title = 'Wicket' }: { state: MatchState; onClose: () => void; onSubmit: (a: Wicket) => void; title?: string }) {
+export default function WicketModal({ state, onClose, onSubmit, title = 'Wicket', serverError = null, busy = false }: { state: MatchState; onClose: () => void; onSubmit: (a: Wicket) => void; title?: string; serverError?: string | null; busy?: boolean }) {
   const inn = state.innings!
   const [type, setType] = useState<DismissalType | null>(null)
   const [ballType, setBallType] = useState<Extract<ExtrasType, 'None' | 'Wide' | 'NoBall'>>('None')
   const [outId, setOutId] = useState<string>(inn.striker?.playerId ?? '')
   const [fielderId, setFielderId] = useState('')
   const [runs, setRuns] = useState(0)
-  const [newBatter, setNewBatter] = useState('')
   const [error, setError] = useState('')
 
   const striker = inn.striker, nonStriker = inn.nonStriker
-  const batters = state.actions.availableBatters
   const fielders = state.actions.fieldingXI
   const need = type ? fielderNeed(type) : 'none'
 
@@ -30,7 +28,7 @@ export default function WicketModal({ state, onClose, onSubmit, title = 'Wicket'
     if (!type) return
     const a: Wicket = {
       kind: 'wicket', dismissal: type, dismissedPlayerId: outId || null, fielderId: fielderId || null,
-      newBatterId: newBatter || null, runs, ballType,
+      newBatterId: null, runs, ballType,   // who comes in is chosen afterwards in the side panel, when the scorer is ready
     }
     const problem = validateWicket(a, striker?.playerId ?? null, nonStriker?.playerId ?? null)
     if (problem) { setError(problem); return }
@@ -40,7 +38,7 @@ export default function WicketModal({ state, onClose, onSubmit, title = 'Wicket'
   return (
     <Modal open onClose={onClose} title={title} size="lg" footer={<>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
-      <Button variant="danger" disabled={type === null} onClick={submit}>Confirm wicket</Button>
+      <Button variant="danger" loading={busy} disabled={type === null} onClick={submit}>Confirm wicket</Button>
     </>}>
       <div className="flex flex-col gap-4">
         <div>
@@ -71,16 +69,25 @@ export default function WicketModal({ state, onClose, onSubmit, title = 'Wicket'
           </div>
         </div>
 
-        {type && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Who is out">
-              {(id) => (
-                <Select id={id} value={outId} onChange={(e) => setOutId(e.target.value)}>
-                  {striker && <option value={striker.playerId}>{striker.name} (striker)</option>}
-                  {nonStriker && canNonStrikerBeOut(type) && <option value={nonStriker.playerId}>{nonStriker.name} (non-striker)</option>}
-                </Select>
-              )}
-            </Field>
+        {/* This block is always there, even before a dismissal is picked, and its fields sit in ONE row on a wide screen. Picking a
+            dismissal used to make the dialog taller and moved "Confirm wicket" down, so a tap on its old position hit nothing. */}
+        <div className="grid gap-4 sm:min-h-[9rem] sm:grid-cols-4">
+          {type && (<>
+            {/* the batter who is out: tap a card (same look as the Select bowler / Select batter list) instead of using a drop-down */}
+            <div role="radiogroup" aria-label="Who is out" className="flex flex-col gap-2 sm:col-span-2">
+              <p className="text-sm font-medium text-slate-700">Who is out</p>
+              <div className="grid gap-2">
+                {([[striker, 'striker'], [nonStriker && canNonStrikerBeOut(type) ? nonStriker : null, 'non-striker']] as const).map(([b, role]) => b && (
+                  <button key={b.playerId} type="button" role="radio" aria-checked={outId === b.playerId} onClick={() => setOutId(b.playerId)}
+                    className={cn('flex items-center gap-3 rounded-lg border p-2 text-left text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand',
+                      outId === b.playerId ? 'border-red-600 bg-red-50 text-slate-900' : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-50')}>
+                    <Avatar name={b.name} src={b.photoUrl} size={32} />
+                    <span className="min-w-0 flex-1 truncate">{b.name}</span>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">{role}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             {need !== 'none' && (
               <Field label={type === 'Stumped' ? 'Wicket-keeper' : type === 'Caught' ? 'Caught by' : 'Fielder (optional)'} hint={type === 'Caught' && inn.bowler ? 'Caught & bowled: pick the bowler.' : undefined}>
                 {(id) => (
@@ -96,17 +103,9 @@ export default function WicketModal({ state, onClose, onSubmit, title = 'Wicket'
                 {(id) => <Select id={id} value={runs} onChange={(e) => setRuns(Number(e.target.value))}>{[0, 1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</Select>}
               </Field>
             )}
-            <Field label="Incoming batter" hint="Choose later and the scorer is asked right after.">
-              {(id) => (
-                <Select id={id} value={newBatter} onChange={(e) => setNewBatter(e.target.value)}>
-                  <option value="">Choose later</option>
-                  {batters.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </Select>
-              )}
-            </Field>
-          </div>
-        )}
-        {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p>}
+          </>)}
+        </div>
+        {(error || serverError) && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{error || serverError}</p>}
       </div>
     </Modal>
   )

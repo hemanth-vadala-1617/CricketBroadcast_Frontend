@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -7,6 +7,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+    <script>
+      // Apply the saved colour theme before anything paints, so a dark page never flashes white. (The OBS overlay is never dark.)
+      try {
+        var m = localStorage.getItem('cs-theme') || 'system';
+        var dark = m === 'dark' || (m === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark && location.pathname.indexOf('/overlay') !== 0) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
     <title>Cricket Broadcast Stream</title>
   </head>
   <body>

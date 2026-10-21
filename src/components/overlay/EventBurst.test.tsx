@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { describeBurst, describePenalty, EVENT_MS, EventBurst, STRIPE } from './EventBurst'
+import { describeBurst, describePenalty, describePowerSurge, EVENT_MS, EventBurst, STRIPE } from './EventBurst'
 import { referenceState } from './fixtures'
 import type { BallKind, MatchState } from '../../lib/types'
 
@@ -189,5 +189,145 @@ describe('penalty runs', () => {
     expect(screen.getByTestId('event-burst')).toHaveAttribute('data-kind', 'Six')
     rerender(<EventBurst state={withBall('b2', 'Six', '6', { version: 12, lastPenalty: { id: 'p9', runs: 5 } })} />)
     expect(screen.getByTestId('event-burst')).toHaveAttribute('data-kind', 'Penalty')
+  })
+})
+describe('sixes in a row', () => {
+  const sixState = (streak?: number): MatchState => ({ ...referenceState(), lastBall: { ballId: `six-${streak ?? 0}`, label: '6', kind: 'Six', runs: 6, sixStreak: streak } })
+
+  it('a single six (or an older API with no streak) is the normal SIX', () => {
+    expect(describeBurst(sixState(1))).toMatchObject({ kind: 'Six', title: 'SIX' })
+    expect(describeBurst(sixState(undefined))?.streak).toBeUndefined()
+  })
+
+  it('two in a row is BACK-TO-BACK SIXES, more is N IN A ROW', () => {
+    expect(describeBurst(sixState(2))).toMatchObject({ kind: 'Six', title: 'SIXES', tag: 'BACK-TO-BACK', streak: 2 })
+    expect(describeBurst(sixState(4))).toMatchObject({ title: 'SIXES', tag: '4 IN A ROW', streak: 4 })
+  })
+
+  it('draws one 6 badge per six on screen', () => {
+    vi.useFakeTimers()
+    try {
+      const { rerender } = render(<EventBurst state={{ ...referenceState(), lastBall: null }} />)
+      rerender(<EventBurst state={sixState(4)} />)
+      const streak = screen.getByTestId('six-streak')
+      expect(streak.textContent).toContain('4 IN A ROW')
+      expect(streak.textContent).toContain('SIXES')
+      expect(streak.querySelectorAll('span[style*="radial-gradient"]')).toHaveLength(4)
+    } finally { vi.useRealTimers() }
+  })
+})
+
+describe('no-ball siren', () => {
+  it('plays the siren once for a new no-ball and not for other balls or one already there on load', async () => {
+    const sound = await import('../../lib/sound')
+    const spy = vi.spyOn(sound, 'playSiren').mockImplementation(() => {})
+    try {
+      const { rerender } = render(<EventBurst state={withBall('nb0', 'NoBall', 'NB')} />)
+      expect(spy).not.toHaveBeenCalled()                                  // already last when the page loaded
+      rerender(<EventBurst state={withBall('four', 'Four', '4')} />)
+      expect(spy).not.toHaveBeenCalled()
+      rerender(<EventBurst state={withBall('nb1', 'NoBall', 'NB')} />)
+      expect(spy).toHaveBeenCalledTimes(1)
+      rerender(<EventBurst state={withBall('nb1', 'NoBall', 'NB', { version: 99 })} />)
+      expect(spy).toHaveBeenCalledTimes(1)                                // a later state update does not replay it
+    } finally { spy.mockRestore() }
+  })
+})
+
+describe('hat-tricks', () => {
+  const ball = (kind: BallKind, extra: Partial<NonNullable<MatchState['lastBall']>>): MatchState => ({ ...referenceState(), lastBall: { ballId: `h-${kind}-${JSON.stringify(extra)}`, label: 'x', kind, runs: 0, ...extra } })
+
+  it('three sixes in a row by one batter is the sixes hat-trick; four in a row goes back to the streak wording', () => {
+    expect(describeBurst(ball('Six', { sixStreak: 3 }))).toMatchObject({ hatTrick: true, title: 'SIXES', tag: 'HAT-TRICK OF' })
+    expect(describeBurst(ball('Six', { sixStreak: 4 }))).toMatchObject({ title: 'SIXES', tag: '4 IN A ROW' })
+    expect(describeBurst(ball('Six', { sixStreak: 4 }))?.hatTrick).toBeUndefined()
+  })
+
+  it('three fours in a row is the fours hat-trick; two is just a four', () => {
+    expect(describeBurst(ball('Four', { fourStreak: 3 }))).toMatchObject({ hatTrick: true, title: 'FOURS' })
+    expect(describeBurst(ball('Four', { fourStreak: 2 }))).toMatchObject({ title: 'FOUR' })
+    expect(describeBurst(ball('Four', { fourStreak: 2 }))?.hatTrick).toBeUndefined()
+  })
+
+  it('a bowler on two wickets is "on a hat-trick"; the third wicket is the hat-trick', () => {
+    expect(describeBurst(ball('Wicket', { wicketStreak: 2 }))).toMatchObject({ title: 'OUT!', tag: 'ON A HAT-TRICK' })
+    expect(describeBurst(ball('Wicket', { wicketStreak: 3 }))).toMatchObject({ hatTrick: true, title: 'HAT-TRICK!' })
+    expect(describeBurst(ball('Wicket', { wicketStreak: 1 }))?.tag).toBeUndefined()
+  })
+
+  it('draws three badges and the bowler name for a wicket hat-trick', () => {
+    vi.useFakeTimers()
+    try {
+      const { rerender } = render(<EventBurst state={{ ...referenceState(), lastBall: null }} />)
+      rerender(<EventBurst state={ball('Wicket', { wicketStreak: 3 })} />)
+      const hat = screen.getByTestId('hat-trick')
+      expect(hat.querySelectorAll('[data-hat-badge]')).toHaveLength(3)
+      expect(hat.textContent).toContain('HAT-TRICK FOR')
+      expect(hat.textContent).toContain('Pat Cummins')
+    } finally { vi.useRealTimers() }
+  })
+})
+
+describe('BBL Power Surge', () => {
+  const surgeState = (over: Partial<NonNullable<NonNullable<MatchState['innings']>['powerSurge']>> | null): MatchState => {
+    const base = referenceState()
+    return { ...base, innings: { ...base.innings!, powerSurge: over === null ? null : { active: true, used: true, canStart: false, canCancel: false, startOver: 12, overs: 2, oversLeft: 2, ...over } } }
+  }
+
+  it('is announced once when the surge becomes active, not on load, and not again on later updates', () => {
+    vi.useFakeTimers()
+    try {
+      const { rerender } = render(<EventBurst state={surgeState({ active: false, used: false })} />)
+      expect(screen.queryByTestId('power-surge-burst')).toBeNull()
+      rerender(<EventBurst state={surgeState({})} />)
+      const burst = screen.getByTestId('power-surge-burst')
+      expect(burst.textContent).toContain('POWER SURGE')
+      expect(burst.textContent).toContain('2 OVERS OF FIELD RESTRICTIONS')
+      act(() => { vi.advanceTimersByTime(EVENT_MS + 200) })
+      expect(screen.queryByTestId('power-surge-burst')).toBeNull()
+      rerender(<EventBurst state={{ ...surgeState({ oversLeft: 1 }), version: 99 }} />)
+      expect(screen.queryByTestId('power-surge-burst')).toBeNull()
+    } finally { vi.useRealTimers() }
+  })
+
+  it('does not replay for a surge that was already on when the page loaded', () => {
+    render(<EventBurst state={surgeState({})} />)
+    expect(screen.queryByTestId('power-surge-burst')).toBeNull()
+  })
+
+  it('has no announcement when the rules have no Power Surge', () => {
+    expect(describePowerSurge(surgeState(null))).toBeNull()
+    expect(describePowerSurge(surgeState({ active: false, used: true }))).toBeNull()
+  })
+})
+
+describe('duck out', () => {
+  const out = (extra: Partial<NonNullable<MatchState['lastBall']>>): MatchState => ({ ...referenceState(), lastBall: { ballId: `d-${JSON.stringify(extra)}`, label: 'W', kind: 'Wicket', runs: 0, ...extra } })
+
+  it('words a plain, a golden and a diamond duck', () => {
+    expect(describeBurst(out({ duckType: 'Duck', duckName: 'Axar Patel' }))).toMatchObject({ duck: 'Duck', title: 'DUCK!', tag: 'OUT FOR NOUGHT', who: 'Axar Patel' })
+    expect(describeBurst(out({ duckType: 'Golden' }))).toMatchObject({ duck: 'Golden', title: 'GOLDEN DUCK!', tag: 'OUT FIRST BALL' })
+    expect(describeBurst(out({ duckType: 'Diamond' }))).toMatchObject({ duck: 'Diamond', title: 'DIAMOND DUCK!' })
+  })
+
+  it('a wicket with runs is the normal OUT, and a hat-trick keeps its own graphic', () => {
+    expect(describeBurst(out({}))).toMatchObject({ title: 'OUT!' })
+    expect(describeBurst(out({}))?.duck).toBeUndefined()
+    const both = describeBurst(out({ duckType: 'Duck', wicketStreak: 3 }))
+    expect(both?.hatTrick).toBe(true)
+    expect(both?.duck).toBeUndefined()
+  })
+
+  it('draws the duck, the word and the batter on screen', () => {
+    vi.useFakeTimers()
+    try {
+      const { rerender } = render(<EventBurst state={{ ...referenceState(), lastBall: null }} />)
+      rerender(<EventBurst state={out({ duckType: 'Golden', duckName: 'Mehidy Hasan' })} />)
+      expect(screen.getByTestId('duck-run')).toBeInTheDocument()
+      const text = screen.getByTestId('duck-out')
+      expect(text).toHaveAttribute('data-duck', 'Golden')
+      expect(text.textContent).toContain('GOLDEN DUCK!')
+      expect(text.textContent).toContain('Mehidy Hasan')
+    } finally { vi.useRealTimers() }
   })
 })

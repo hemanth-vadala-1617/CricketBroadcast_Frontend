@@ -15,8 +15,9 @@ export function statusLine(state: MatchState): string {
 }
 
 // "WI (2nd Inn)": the button that switches between innings.
-export function inningsLabel(card: Pick<InningsScorecard, 'battingTeam' | 'inningsNumber'>): string {
-  return `${card.battingTeam.shortName} (${ordinal(card.inningsNumber)} Inn)`
+export function inningsLabel(card: Pick<InningsScorecard, 'battingTeam' | 'inningsNumber'> & Partial<Pick<InningsScorecard, 'isSuperOver' | 'isFollowOn'>>): string {
+  if (card.isSuperOver) return `${card.battingTeam.shortName} (Super Over)`
+  return `${card.battingTeam.shortName} (${ordinal(card.inningsNumber)} Inn${card.isFollowOn ? ', f/o' : ''})`
 }
 
 // "Shai Hope (c & wk)"

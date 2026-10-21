@@ -54,6 +54,23 @@ function RulesModal({ rules, onClose }: { rules: MatchRules | null; onClose: () 
         <Field label="Runs for a no-ball">{(id) => <NumberInput id={id} min={0} max={5} value={form.noBallRuns} onValueChange={(n) => set('noBallRuns', n)} />}</Field>
       </FormGrid>
       <Checkbox label="Free hit after a no-ball" checked={form.freeHitEnabled} onChange={(e) => set('freeHitEnabled', e.target.checked)} />
+      {!form.isTest && (
+        <fieldset className="rounded-lg border border-slate-200 p-4">
+          <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Power Surge (BBL)</legend>
+          <Checkbox label="This competition has a Power Surge" checked={!!form.powerSurgeEnabled} onChange={(e) => set('powerSurgeEnabled', e.target.checked)} />
+          {form.powerSurgeEnabled && (
+            <>
+              <p className="mt-2 text-xs text-slate-500">The batting side picks when to take it. It is a block of overs with the powerplay field restrictions back on, started between overs inside the window below.</p>
+              <div className="mt-3"><FormGrid>
+                <Field label="Overs in the surge">{(id) => <NumberInput id={id} min={1} max={5} value={form.powerSurgeOvers ?? 2} onValueChange={(n) => set('powerSurgeOvers', n)} />}</Field>
+                <span />
+                <Field label="Earliest start (over no.)" hint="BBL: 11.">{(id) => <NumberInput id={id} min={1} value={form.powerSurgeFromOver ?? 11} onValueChange={(n) => set('powerSurgeFromOver', n)} />}</Field>
+                <Field label="Latest start (over no.)" hint="BBL: 16.">{(id) => <NumberInput id={id} min={1} value={form.powerSurgeToOver ?? 16} onValueChange={(n) => set('powerSurgeToOver', n)} />}</Field>
+              </FormGrid></div>
+            </>
+          )}
+        </fieldset>
+      )}
       {form.isTest && (
         <fieldset className="rounded-lg border border-slate-200 p-4">
           <legend className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Test match clock</legend>
@@ -109,7 +126,8 @@ export default function RulesPage() {
         <DetailsModal title={viewing.name} canEdit onClose={() => setViewing(null)} onEdit={() => { setEditing(viewing); setViewing(null) }}
           header={<Badge tone={viewing.isTest ? 'purple' : 'blue'}>{viewing.isTest ? 'Test' : 'Limited overs'}</Badge>}
           rows={[
-            { label: 'Summary', value: summary(viewing) }, { label: 'Balls per over', value: viewing.ballsPerOver },
+            { label: 'Summary', value: summary(viewing) },
+            ...(viewing.powerSurgeEnabled ? [{ label: 'Power Surge', value: `${viewing.powerSurgeOvers ?? 2} overs, started between over ${viewing.powerSurgeFromOver ?? 11} and ${viewing.powerSurgeToOver ?? 16}` }] : []), { label: 'Balls per over', value: viewing.ballsPerOver },
             { label: 'Wide / no-ball', value: `${viewing.wideRuns} / ${viewing.noBallRuns} runs` }, { label: 'Free hit', value: viewing.freeHitEnabled ? 'Yes' : 'No' },
             ...(viewing.isTest
               ? [{ label: 'Days', value: viewing.days }, { label: 'Overs a day', value: viewing.oversPerDay }, { label: 'Sessions a day', value: viewing.sessionsPerDay },

@@ -1,15 +1,22 @@
+import { useEffect, useState } from 'react'
+import { watchAudioLock } from '../../lib/sound'
 import { assetUrl } from '../../lib/utils'
 import type { MatchState } from '../../lib/types'
 import { BannerBar } from './BannerBar'
+import { BreakCard } from './BreakCard'
+import { DeadBallFlash, useDeadBall } from './DeadBallFlash'
 import { BatterCard, CARD_W } from './BatterCard'
 import { BowlerCard } from './BowlerCard'
 import { BOX_AFTER_BURST_MS, EventBurst } from './EventBurst'
 import { FullScorecardPanel } from './FullScorecardPanel'
 import { InfoCard } from './InfoCard'
 import { LineupPanel } from './LineupPanel'
+import { MilestoneCard, useMilestones } from './MilestoneCard'
 import { NewBatterCard, useNewBatter } from './NewBatterCard'
+import { SixMeterCard, useSixMeter } from './SixMeterCard'
 import { selectedLineups } from './lineup'
 import { Presence } from './OverlayBits'
+import { RainEffect } from './RainEffect'
 import { Scorebug } from './Scorebug'
 import { TimelineBar } from './TimelineBar'
 import { WinProbabilityStrip } from './WinProbabilityStrip'
@@ -17,6 +24,15 @@ import { CANVAS_H, CANVAS_W, useFitScale } from './useFitScale'
 
 function summaryLines(state: MatchState): string[] {
   return state.scorecard.map((c) => `${c.battingTeam.name} ${c.runs}-${c.wickets} (${c.overs})`)
+}
+
+/** At the innings break of a limited-overs match: what the side batting next has to chase. */
+export function chaseTargetLine(state: MatchState): string | null {
+  if (state.isTest || state.scorecard.length !== 1) return null
+  const first = state.scorecard[0]!
+  const chasing = first.battingTeam.id === state.homeTeam.id ? state.awayTeam : state.homeTeam
+  const overs = state.oversPerInnings > 0 ? ` in ${state.oversPerInnings} overs` : ''
+  return `${chasing.name} need ${first.runs + 1} runs to win${overs}`
 }
 
 /** Fixed 1920x1080 broadcast canvas, scaled to fit. Transparent unless showBackground (previews). */
@@ -29,7 +45,12 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
   const showScorebug = !!innings && graphics.Scorebug.isVisible
   const showWin = graphics.WinProbability.isVisible && state.winProbability.home + state.winProbability.draw + state.winProbability.away > 0
   const bg = assetUrl(state.backgroundUrl)
+  const [soundLocked, setSoundLocked] = useState(false)
+  useEffect(() => watchAudioLock(setSoundLocked), [])
   const { shown: newBatter, held } = useNewBatter(state, inPlay)
+  const milestone = useMilestones(state, inPlay)
+  const sixMeter = useSixMeter(state, inPlay)
+  const deadBall = useDeadBall(state, inPlay)
 
   const canvasBg = showBackground
     ? { background: bg ? `center / cover url(${bg})` : 'linear-gradient(180deg, #14532d 0%, #166534 45%, #3f6212 100%)' }
@@ -91,8 +112,11 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
         {!innings && !finished && (
           <InfoCard title="Match starts soon" accent={theme.accentColor} lines={[`${state.homeTeam.name} vs ${state.awayTeam.name}`, state.tossText ?? '', state.venueName]} />
         )}
-        {status === 'InningsBreak' && <InfoCard title="Innings break" accent={theme.accentColor} lines={summaryLines(state)} />}
-        {(status === 'RainDelay' || status === 'Paused') && <InfoCard title="Play suspended" accent="#f59e0b" lines={[status === 'RainDelay' ? 'Rain delay' : 'Play paused']} />}
+        {status === 'InningsBreak' && <InfoCard title="Innings break" accent={theme.accentColor} lines={[...summaryLines(state), chaseTargetLine(state) ?? '']} />}
+        {status === 'RainDelay' && <RainEffect />}
+        {(status === 'RainDelay' || status === 'Paused') && (state.break
+          ? <BreakCard state={state} brk={state.break} />
+          : <InfoCard title="Play suspended" accent="#f59e0b" lines={[status === 'RainDelay' ? 'Rain delay' : 'Play paused']} />)}
         {finished && <InfoCard title={status === 'Abandoned' ? 'Match abandoned' : 'Full time'} accent={theme.accentColor} lines={[state.resultText ?? '', ...summaryLines(state)]} />}
 
         <Presence show={graphics.FullScorecard.isVisible && state.scorecard.length > 0} enter="pop"><FullScorecardPanel state={state} /></Presence>
@@ -106,8 +130,18 @@ export function BroadcastOverlay({ state, showBackground = false }: { state: Mat
 
         {inPlay && newBatter && <NewBatterCard key={newBatter.playerId} batter={newBatter} state={state} />}
 
+        {inPlay && milestone && <MilestoneCard key={milestone.id} milestone={milestone} />}
+        {inPlay && sixMeter && <SixMeterCard key={sixMeter.id} meter={sixMeter} />}
+
+        {inPlay && deadBall && <DeadBallFlash />}
         {inPlay && <EventBurst state={state} />}
       </div>
+      {/* In a normal browser tab (not OBS) audio stays locked until one click: say so, only on the preview with a background */}
+      {showBackground && soundLocked && (
+        <div data-testid="sound-locked" style={{ position: 'fixed', left: 12, bottom: 12, padding: '6px 12px', borderRadius: 8, background: 'rgba(0,0,0,.75)', color: '#fff', font: '600 14px system-ui, sans-serif', pointerEvents: 'none' }}>
+          Sound is off until you click this page once
+        </div>
+      )}
     </div>
   )
 }

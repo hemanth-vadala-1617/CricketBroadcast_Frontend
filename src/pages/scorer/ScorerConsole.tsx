@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Eye, EyeOff, Keyboard, Radio } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Keyboard, Maximize2, Minimize2, Radio, Volume2 } from 'lucide-react'
+import { playSiren } from '../../lib/sound'
 import { useLiveMatch } from '../../hooks/useLiveMatch'
 import type { LiveStatus } from '../../lib/liveMatch'
 import { Button, Card, ConfirmDialog, Field, Input, Modal, Spinner, StatusBadge } from '../../components/ui'
@@ -9,13 +10,18 @@ import ScoreStrip from '../../components/scorer/ScoreStrip'
 import ScoringPad from '../../components/scorer/ScoringPad'
 import WicketModal from '../../components/scorer/WicketModal'
 import PreInnings from '../../components/scorer/PreInnings'
-import { CheatSheet, CompleteMatchModal, OversLostModal, PenaltyModal, PlayerPicker, RetireModal, UndoModal } from '../../components/scorer/Dialogs'
+import { AbsentHurtModal, CheatSheet, CompleteMatchModal, OversLostModal, PenaltyModal, PlayerPicker, RetireModal, ReviseModal, UndoModal } from '../../components/scorer/Dialogs'
 import { useScorer } from './useScorer'
 import { LineupToggle } from '../../components/scorer/LineupAirToggle'
+import SixMeterPad from '../../components/scorer/SixMeterPad'
+import ThemeToggle from '../../components/ThemeToggle'
+import NextPlayerPanel from '../../components/scorer/NextPlayerPanel'
+import PowerSurgeCard from '../../components/scorer/PowerSurgeCard'
+import BreaksCard from '../../components/scorer/BreaksCard'
 import type { PadAction } from './buildRequest'
 
 type Dlg = null | 'wicket' | 'editWicket' | 'edit' | 'undo' | 'retire' | 'penalty' | 'endInnings' | 'declare' | 'complete'
-  | 'oversLost' | 'cheat' | 'changeBowler' | 'cancelInnings' | 'session'
+  | 'oversLost' | 'cheat' | 'changeBowler' | 'cancelInnings' | 'session' | 'absent' | 'revise'
 
 const dot: Record<LiveStatus, { color: string; label: string }> = {
   live: { color: 'bg-emerald-500', label: 'Live' },
@@ -42,6 +48,14 @@ export default function ScorerConsole() {
   const [dlg, setDlg] = useState<Dlg>(null)
   const [preview, setPreview] = useState(true)
   const [editReason, setEditReason] = useState('')
+  const stage = useRef<HTMLDivElement>(null)
+  const [full, setFull] = useState(false)
+  useEffect(() => {
+    const sync = () => setFull(document.fullscreenElement === stage.current)
+    document.addEventListener('fullscreenchange', sync)
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+  const toggleFull = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void stage.current?.requestFullscreen?.() }
 
   const close = useCallback(() => setDlg(null), [])
   const openWicket = useCallback(() => setDlg('wicket'), [])
@@ -56,8 +70,9 @@ export default function ScorerConsole() {
   const inn = state.innings
   const inProgress = inn?.status === 'InProgress'
   const paused = state.status === 'RainDelay' || state.status === 'Paused'
-  const blockerBatter = inProgress && a.awaitingNewBatter && dlg === null
-  const blockerBowler = inProgress && !a.awaitingNewBatter && a.awaitingNewBowler && dlg === null
+  // After a wicket / an over the scorer is asked who is next, in the side panel and only when ready (no pop-up, nothing goes on air meanwhile).
+  const needBatter = inProgress && a.awaitingNewBatter
+  const needBowler = inProgress && !a.awaitingNewBatter && a.awaitingNewBowler
   const padDisabled = sc.busy || !a.canScoreBall
   const finished = state.status === 'Completed' || state.status === 'Abandoned'
 
@@ -69,11 +84,14 @@ export default function ScorerConsole() {
 
   return (
     <div className="min-h-full bg-slate-100">
-      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2 shadow-sm">
-        <Link to={`/admin/matches/${matchId}`} aria-label="Back to match" className="rounded p-1 text-slate-500 hover:bg-slate-100"><ArrowLeft className="size-5" /></Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-bold text-slate-900">{state.title}</h1>
-          <p className="truncate text-xs text-slate-500">{state.tournamentName} · {state.venueName}</p>
+      <header className="z-30 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:sticky sm:top-0 sm:px-4">
+        {/* on a phone the title gets the whole first line and the buttons wrap onto the next one */}
+        <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-0 sm:flex-1">
+          <Link to={`/admin/matches/${matchId}`} aria-label="Back to match" className="rounded p-1 text-slate-500 hover:bg-slate-100"><ArrowLeft className="size-5" /></Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-bold text-slate-900 sm:text-lg">{state.title}</h1>
+            <p className="truncate text-xs text-slate-500">{state.tournamentName} · {state.venueName}</p>
+          </div>
         </div>
         <StatusBadge status={state.status} />
         {/* Only shown when the connection is NOT fine: a second "Live" next to the match's LIVE badge was confusing. */}
@@ -82,19 +100,30 @@ export default function ScorerConsole() {
             <span className={cn('size-2.5 rounded-full', dot[status].color)} />{dot[status].label}
           </span>
         )}
-        <Link to={`/producer/${matchId}`} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Radio className="size-4" />Producer</Link>
-        <Button size="sm" variant="secondary" aria-pressed={preview} onClick={() => setPreview((p) => !p)}>{preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}Preview</Button>
+        <Link to={`/producer/${matchId}`} aria-label="Producer console" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Radio className="size-4" /><span className="hidden sm:inline">Producer</span></Link>
+        <Button size="sm" variant="secondary" aria-label="Preview" aria-pressed={preview} onClick={() => setPreview((p) => !p)}>{preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}<span className="hidden sm:inline">Preview</span></Button>
+        <Button size="sm" variant="secondary" aria-label="Test siren sound" title="Play the no-ball siren to check your volume" onClick={playSiren}><Volume2 className="size-4" /></Button>
+        <ThemeToggle />
         <Button size="sm" variant="secondary" aria-label="Keyboard shortcuts" onClick={() => setDlg('cheat')}><Keyboard className="size-4" /></Button>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-4">
+      <div className="mx-auto grid max-w-7xl gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">
+        {/* who is next: first on a phone (right under the header), top of the side panel on a wide screen */}
+        {(needBatter || needBowler) && (
+          <div className="lg:col-start-2 lg:row-start-1">
+            {needBatter
+              ? <NextPlayerPanel kind="batter" players={a.availableBatters} returning={a.retiredHurtIds} busy={sc.busy} onPick={(p) => void sc.newBatter(p.id)}
+                  footer={a.availableBatters.length === 0 ? <Button variant="danger" onClick={() => setDlg('endInnings')}>End innings</Button> : undefined} />
+              : <NextPlayerPanel kind="bowler" players={a.eligibleBowlers} busy={sc.busy} onPick={(p) => void sc.newBowler(p.id)} />}
+          </div>
+        )}
+        <div className="flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-span-2 lg:row-start-1">
           {finished && (
             <div role="status" className="rounded-xl bg-purple-700 p-4 text-center text-lg font-bold text-white">{state.resultText ?? state.status}</div>
           )}
           {paused && (
             <div role="status" className="flex items-center justify-between gap-3 rounded-xl bg-amber-500 p-4 font-bold text-white">
-              <span>{state.status === 'RainDelay' ? 'Rain delay' : 'Match paused'}. Scoring is locked.</span>
+              <span>{state.break?.label ?? (state.status === 'RainDelay' ? 'Rain delay' : 'Match paused')}. Scoring is locked.</span>
               <Button variant="secondary" loading={sc.busy} onClick={() => void sc.resume()}>Resume play</Button>
             </div>
           )}
@@ -102,8 +131,12 @@ export default function ScorerConsole() {
           {/* The TV scoreboard exactly as OBS will show it; it updates on every ball you score. */}
           {preview && (
             <Card className="overflow-hidden">
-              <div className="aspect-video w-full bg-slate-900">
-                <iframe title="TV scoreboard preview" src={`/overlay/${matchId}?bg=1`} className="size-full border-0" />
+              <div ref={stage} className="group relative aspect-video w-full bg-black [&:fullscreen]:aspect-auto [&:fullscreen]:h-screen">
+                <iframe title="TV scoreboard preview" src={`/overlay/${matchId}?bg=1`} allow="autoplay; fullscreen" className="size-full border-0" />
+                <button type="button" onClick={toggleFull} aria-label={full ? 'Exit full screen' : 'Full screen'} title={full ? 'Exit full screen (Esc)' : 'Full screen'}
+                  className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/70 px-3 py-1.5 text-sm font-semibold text-white opacity-80 transition hover:opacity-100 focus-visible:outline-2 focus-visible:outline-white">
+                  {full ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}{full ? 'Exit' : 'Full screen'}
+                </button>
               </div>
             </Card>
           )}
@@ -112,36 +145,41 @@ export default function ScorerConsole() {
 
           {inProgress ? (
             <Card className="p-4">
-              <ScoringPad disabled={padDisabled} freeHit={inn.freeHit} shortcuts={dlg === null && !blockerBatter && !blockerBowler}
+              <ScoringPad disabled={padDisabled} freeHit={inn.freeHit} shortcuts={dlg === null}
                 onAction={(x) => void doScore(x)} onWicket={openWicket} onSwap={swap} onUndo={openUndo} />
               {!a.canScoreBall && !paused && (a.awaitingNewBatter || a.awaitingNewBowler) && <p role="status" className="mt-3 text-sm font-semibold text-amber-700">Choose the {a.awaitingNewBatter ? 'incoming batter' : 'next bowler'} to continue.</p>}
             </Card>
-          ) : !finished && (
+          ) : (!finished || a.canStartSuperOver) && (
             <PreInnings state={state} busy={sc.busy} matchId={matchId}
               onStartMatch={() => void sc.startMatch()} onStart={(i) => void sc.startInnings(i)} onComplete={() => setDlg('complete')} />
           )}
         </div>
 
-        <aside className="flex flex-col gap-4" aria-label="Scorer actions">
+        <aside className={cn("flex flex-col gap-4 lg:col-start-2", (needBatter || needBowler) ? "lg:row-start-2" : "lg:row-start-1")} aria-label="Scorer actions">
+          {inProgress && inn?.powerSurge && <PowerSurgeCard surge={inn.powerSurge} busy={sc.busy} onStart={() => void sc.powerSurge(true)} onCancel={() => void sc.powerSurge(false)} />}
+
+          <BreaksCard isTest={state.isTest} current={state.break ?? (paused ? { kind: 'Other', label: state.status === 'RainDelay' ? 'Rain delay' : 'Match paused', plannedSeconds: 0, elapsedSeconds: 0 } : null)}
+            canStart={state.status === 'Live' || state.status === 'InningsBreak'} busy={sc.busy}
+            onStart={(k, m) => void sc.startBreak(k, m)} onResume={() => void sc.resume()} />
+
           <Group title="Correct">
             <Button variant="warning" disabled={sc.busy || !a.canUndo} onClick={openUndo}>Undo ball</Button>
             <Button variant="secondary" disabled={sc.busy || !a.canUndo || !state.lastBall} onClick={() => { setEditReason('Wrong runs'); setDlg('edit') }}>Edit last ball</Button>
-            <Button variant="secondary" disabled={sc.busy || !inProgress || a.awaitingNewBatter} onClick={swap}>Swap strike</Button>
+            <Button variant="secondary" disabled={sc.busy || !inProgress || a.awaitingNewBatter || paused} onClick={swap}>Swap strike</Button>
             <Button variant="secondary" disabled={sc.busy || !inProgress || a.awaitingNewBatter} onClick={() => setDlg('retire')}>Retire batter</Button>
+            <Button variant="secondary" disabled={sc.busy || !inProgress} onClick={() => setDlg('absent')}>Absent hurt</Button>
             <Button variant="secondary" disabled={sc.busy || !inProgress} onClick={() => setDlg('penalty')}>Penalty runs</Button>
+            <Button variant="secondary" disabled={sc.busy || !inProgress || paused} onClick={() => void sc.deadBall()}>Dead ball</Button>
+            {a.canReviseTarget && <Button variant="secondary" disabled={sc.busy || !inProgress} onClick={() => setDlg('revise')}>Revise overs / target</Button>}
             <Button variant="secondary" disabled={sc.busy || !inProgress || !inn?.bowler || a.awaitingNewBowler} onClick={() => setDlg('changeBowler')}>Change bowler</Button>
           </Group>
+
+          {inProgress && state.lastBall?.kind === 'Six' && <SixMeterPad lastBall={state.lastBall} busy={sc.busy} onSet={(m) => void sc.sixDistance(m)} />}
 
           <Group title="Innings & match">
             <Button variant="secondary" disabled={sc.busy || !inProgress} onClick={() => setDlg('endInnings')}>End innings</Button>
             {a.canDeclare && <Button variant="secondary" disabled={sc.busy} onClick={() => setDlg('declare')}>Declare</Button>}
             <Button variant="secondary" disabled={sc.busy || !inProgress || state.lastBall !== null} onClick={() => setDlg('cancelInnings')}>Cancel innings start</Button>
-            {(state.status === 'Live' || state.status === 'InningsBreak') && (
-              <>
-                <Button variant="secondary" disabled={sc.busy} onClick={() => void sc.pause(true)}>Rain delay</Button>
-                <Button variant="secondary" disabled={sc.busy} onClick={() => void sc.pause(false)}>Pause</Button>
-              </>
-            )}
             <Button variant="danger" disabled={sc.busy || !a.canComplete} onClick={() => setDlg('complete')}>Complete match</Button>
           </Group>
 
@@ -170,7 +208,7 @@ export default function ScorerConsole() {
       </div>
 
       {/* ---- dialogs ---- */}
-      {dlg === 'wicket' && inn && <WicketModal state={state} onClose={close} onSubmit={(x) => void submitWicket(x)} />}
+      {dlg === 'wicket' && inn && <WicketModal state={state} serverError={sc.error} busy={sc.busy} onClose={close} onSubmit={(x) => void submitWicket(x)} />}
       {dlg === 'edit' && inn && (
         <Modal open onClose={close} title="Edit last ball" size="lg" footer={<Button variant="secondary" onClick={close}>Cancel</Button>}>
           <div className="flex flex-col gap-4">
@@ -183,10 +221,19 @@ export default function ScorerConsole() {
           </div>
         </Modal>
       )}
-      {dlg === 'editWicket' && inn && <WicketModal state={state} title="Replace last ball with a wicket" onClose={() => setDlg('edit')} onSubmit={(x) => void submitEditWicket(x)} />}
+      {dlg === 'editWicket' && inn && <WicketModal state={state} title="Replace last ball with a wicket" serverError={sc.error} busy={sc.busy} onClose={() => setDlg('edit')} onSubmit={(x) => void submitEditWicket(x)} />}
       {dlg === 'undo' && <UndoModal lastBall={state.lastBall} onClose={close} onConfirm={(r) => run(sc.undo(r))} />}
       {dlg === 'retire' && inn && <RetireModal state={state} onClose={close} onConfirm={(p, n, r) => run(sc.retire(p, n, r))} />}
-      {dlg === 'penalty' && <PenaltyModal onClose={close} onConfirm={(runs, r) => run(sc.penalty(runs, r))} />}
+      {dlg === 'penalty' && inn && <PenaltyModal battingName={inn.battingTeam.name} bowlingName={inn.bowlingTeam.name} onClose={close} onConfirm={(runs, r, toFielding) => run(sc.penalty(runs, r, toFielding))} />}
+      {dlg === 'absent' && inn && (
+        <AbsentHurtModal busy={sc.busy} onClose={close} onSet={(id, absent) => void sc.absentHurt(id, absent)}
+          available={a.availableBatters.filter((p) => !(a.retiredHurtIds ?? []).includes(p.id))}
+          absent={a.battingXI.filter((p) => (a.absentHurtIds ?? []).includes(p.id))} />
+      )}
+      {dlg === 'revise' && inn && (
+        <ReviseModal oversNow={inn.oversLimit || state.oversPerInnings} maxOvers={100 /* the server checks it against the match rules */}
+          hasTarget={inn.target !== null} targetNow={inn.target} onClose={close} onConfirm={(o, t, r) => run(sc.revise(o, t, r))} />
+      )}
       {dlg === 'complete' && <CompleteMatchModal state={state} onClose={close} onConfirm={(c) => run(sc.complete(c))} />}
       {dlg === 'oversLost' && state.testClock && (
         <OversLostModal current={state.testClock.oversLostToday} max={90} onClose={close} onConfirm={(n) => run(sc.oversLost(n))} />
@@ -209,17 +256,6 @@ export default function ScorerConsole() {
       <ConfirmDialog open={dlg === 'session'} title="Move to the next session?" confirmLabel="Next session" loading={sc.busy}
         message={state.testClock ? `Currently Day ${state.testClock.day}, Session ${state.testClock.session}. After the last session the next day starts and lost overs reset.` : ''}
         onClose={close} onConfirm={() => run(sc.advanceSession())} />
-
-      {/* ---- blocking pickers driven by the server's state ---- */}
-      {blockerBatter && (
-        <PlayerPicker blocking title="Incoming batter" hint="A wicket fell. Who comes in?" players={a.availableBatters} busy={sc.busy}
-          onPick={(p) => void sc.newBatter(p.id)}
-          footer={a.availableBatters.length === 0 ? <Button variant="danger" onClick={() => setDlg('endInnings')}>End innings</Button> : undefined} />
-      )}
-      {blockerBowler && (
-        <PlayerPicker blocking title="Next bowler" hint="The over is complete. Choose who bowls next. The last bowler and anyone who has used their quota are not listed."
-          players={a.eligibleBowlers} busy={sc.busy} onPick={(p) => void sc.newBowler(p.id)} />
-      )}
     </div>
   )
 }

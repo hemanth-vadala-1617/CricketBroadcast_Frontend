@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react'
-import { Button } from '../ui'
+import { Button, Modal } from '../ui'
 import { cn } from '../../lib/utils'
 import type { PadAction } from '../../pages/scorer/buildRequest'
 
@@ -38,7 +38,8 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
   // The key listener is attached once, so it must read the handlers through a ref. Capturing them in the effect left it
   // calling the scoring action from an old render (stale match version), so the shortcuts silently did nothing or failed.
   const latest = useRef({ onAction, onWicket, onSwap, onUndo })
-  useEffect(() => { latest.current = { onAction, onWicket, onSwap, onUndo } })
+  const panelNow = useRef<Panel>(null)
+  useEffect(() => { latest.current = { onAction, onWicket, onSwap, onUndo }; panelNow.current = panel })
 
   useEffect(() => {
     if (!shortcuts || disabled) return
@@ -46,6 +47,7 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
       if (e.repeat) return
+      if (panelNow.current === 'wide' || panelNow.current === 'noball') return   // a wide / no-ball dialog is open: keys must not score behind it
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); latest.current.onUndo?.(); return }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
@@ -68,7 +70,6 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
 
   return (
     <div className="flex flex-col gap-3" aria-label="Scoring pad">
-      {freeHit && <p role="status" className="rounded-lg bg-red-600 px-3 py-2 text-center text-sm font-bold text-white">FREE HIT — only run out, handled ball or obstructing the field</p>}
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
         {[0, 1, 2, 3, 4, 5, 6].map((n) => (
           <Button key={n} disabled={disabled} aria-label={n === 4 ? 'Four (boundary)' : n === 6 ? 'Six' : `${n} run${n === 1 ? '' : 's'}`}
@@ -84,38 +85,41 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
         <Button disabled={disabled} variant="secondary" className="h-14 text-lg" aria-label="Other run values" aria-expanded={panel === 'other'} onClick={() => toggle('other')}>…</Button>
       </div>
       <Button disabled={disabled} variant="danger" size="lg" className="h-16 text-xl" aria-label="Wicket" onClick={onWicket}>WICKET</Button>
+      {/* below the buttons, not above: a banner above them pushed the whole pad down when a free hit began and back up when it ended */}
+      {freeHit && <p role="status" className="rounded-lg bg-red-600 px-3 py-2 text-center text-sm font-bold text-white">FREE HIT — only run out, handled ball or obstructing the field</p>}
 
-      {panel === 'wide' && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-          <p className="mb-2 text-sm font-semibold text-amber-900">Wide — extra runs they ran</p>
-          <div className="flex flex-wrap gap-2">
-            {[0, 1, 2, 3].map((n) => <Chip key={n} label={`Wide plus ${n}`} onClick={() => send({ kind: 'wide', extraRuns: n })}>{n === 0 ? 'WD' : `WD+${n}`}</Chip>)}
-            <Chip label="Wide plus 4 run" onClick={() => send({ kind: 'wide', extraRuns: 4 })}>WD+4 ran</Chip>
-            <Chip label="Wide plus 4 boundary" onClick={() => send({ kind: 'wide', extraRuns: 4, boundary: true })}>WD+4 ⛶</Chip>
-          </div>
+      {/* Wide and no-ball open as a dialog (not a panel under the pad): the choices are bigger and nothing under the pad moves. */}
+      <Modal open={panel === 'wide'} onClose={() => setPanel(null)} title="Wide" size="sm" footer={<Button variant="secondary" onClick={() => setPanel(null)}>Cancel</Button>}>
+        <p className="mb-3 text-sm font-semibold text-slate-700">Extra runs they ran</p>
+        <div className="flex flex-wrap gap-2">
+          {[0, 1, 2, 3].map((n) => <Chip key={n} label={`Wide plus ${n}`} onClick={() => send({ kind: 'wide', extraRuns: n })}>{n === 0 ? 'WD' : `WD+${n}`}</Chip>)}
+          <Chip label="Wide plus 4 run" onClick={() => send({ kind: 'wide', extraRuns: 4 })}>WD+4 ran</Chip>
+          <Chip label="Wide plus 4 boundary" onClick={() => send({ kind: 'wide', extraRuns: 4, boundary: true })}>WD+4 ⛶</Chip>
         </div>
-      )}
+      </Modal>
 
-      {panel === 'noball' && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-          <p className="mb-2 text-sm font-semibold text-amber-900">No-ball — runs off the bat</p>
+      <Modal open={panel === 'noball'} onClose={() => setPanel(null)} title="No ball" size="md" footer={<>
+        <Button variant="secondary" onClick={() => setPanel(null)}>Cancel</Button>
+        <Button variant="warning" onClick={() => send({
+          kind: 'noball', bat: nbBat.bat, boundary: nbBat.boundary,
+          ...(nbSecondary !== 'None' ? { secondary: nbSecondary, extraRuns: nbByes } : {}),
+        })}>Score no-ball</Button>
+      </>}>
+        <div>
+          <p className="mb-2 text-sm font-semibold text-slate-700">Runs off the bat</p>
           <div className="flex flex-wrap gap-2">
             {[0, 1, 2, 3, 5].map((n) => <Chip key={n} active={nbBat.bat === n && !nbBat.boundary} onClick={() => setNbBat({ bat: n, boundary: false })}>{n}</Chip>)}
             <Chip active={nbBat.bat === 4 && !nbBat.boundary} onClick={() => setNbBat({ bat: 4, boundary: false })}>4 ran</Chip>
             <Chip active={nbBat.bat === 4 && nbBat.boundary} onClick={() => setNbBat({ bat: 4, boundary: true })}>4 ⛶</Chip>
             <Chip active={nbBat.bat === 6} onClick={() => setNbBat({ bat: 6, boundary: true })}>6</Chip>
           </div>
-          <p className="mb-2 mt-3 text-sm font-semibold text-amber-900">Plus byes / leg-byes (optional)</p>
+          <p className="mb-2 mt-4 text-sm font-semibold text-slate-700">Plus byes / leg-byes (optional)</p>
           <div className="flex flex-wrap items-center gap-2">
             {(['None', 'Bye', 'LegBye'] as const).map((s) => <Chip key={s} active={nbSecondary === s} onClick={() => setNbSecondary(s)}>{s === 'None' ? 'None' : s === 'Bye' ? 'Byes' : 'Leg-byes'}</Chip>)}
             {nbSecondary !== 'None' && [1, 2, 3, 4].map((n) => <Chip key={n} active={nbByes === n} onClick={() => setNbByes(n)}>{n}</Chip>)}
           </div>
-          <Button className="mt-3" variant="warning" onClick={() => send({
-            kind: 'noball', bat: nbBat.bat, boundary: nbBat.boundary,
-            ...(nbSecondary !== 'None' ? { secondary: nbSecondary, extraRuns: nbByes } : {}),
-          })}>Score no-ball</Button>
         </div>
-      )}
+      </Modal>
 
       {(panel === 'bye' || panel === 'legbye') && (
         <div className="rounded-lg border border-teal-300 bg-teal-50 p-3">
@@ -136,6 +140,15 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
             <Chip label="Five runs" onClick={() => send({ kind: 'runs', runs: 5 })}>5</Chip>
             <Chip label="Seven runs" onClick={() => send({ kind: 'runs', runs: 7 })}>7</Chip>
           </div>
+          <p className="mb-2 mt-3 text-sm font-semibold text-slate-700">Short run — the umpire takes runs off</p>
+          <div className="flex flex-wrap gap-2">
+            {([[1, 1], [2, 1], [3, 1], [2, 2], [3, 2]] as const).map(([ran, short]) => (
+              <Chip key={`${ran}-${short}`} label={`Ran ${ran}, ${short} short`} onClick={() => send({ kind: 'runs', runs: ran, shortRuns: short })}>
+                ran {ran}, {short} short = {ran - short}
+              </Chip>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">The score gets the runs left after the short run; the batters still change ends for the runs they actually ran.</p>
         </div>
       )}
     </div>

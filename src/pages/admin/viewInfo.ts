@@ -31,6 +31,7 @@ export function rulesSummary(r: MatchRules): string {
   parts.push(r.maxOversPerBowler > 0 ? `max ${r.maxOversPerBowler} per bowler` : 'no bowler limit')
   if (r.powerplayOvers > 0) parts.push(`powerplay ${plural(r.powerplayOvers, 'over')}`)
   if (r.freeHitEnabled) parts.push('free hit')
+  if (r.powerSurgeEnabled) parts.push('Power Surge')
   return parts.join(' · ')
 }
 

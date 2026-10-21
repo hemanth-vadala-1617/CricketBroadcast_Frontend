@@ -31,6 +31,7 @@ function Column({ card, accent }: { card: InningsScorecard; accent: string }) {
         <span>{`Extras ${card.extrasText}`}</span><span style={{ fontWeight: 700 }}>{card.extras}</span>
       </div>
       {card.yetToBat.length > 0 && <div style={{ ...cell, whiteSpace: 'normal', opacity: 0.75, fontSize: 17 }}>{`Yet to bat: ${card.yetToBat.join(', ')}`}</div>}
+      {(card.absentHurt?.length ?? 0) > 0 && <div style={{ ...cell, whiteSpace: 'normal', opacity: 0.75, fontSize: 17 }}>{`Absent hurt: ${card.absentHurt!.join(', ')}`}</div>}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, borderTop: '1px solid rgba(255,255,255,.3)' }}>
         <thead>
           <tr style={{ opacity: 0.7, fontSize: 16 }}>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ChangeEvent, type InputHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ChangeEvent, type HTMLAttributes, type InputHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, MoreVertical, Search, Upload, X } from 'lucide-react'
 import { cn, assetUrl, caretAfterDigits, contrastText, formatIndianNumber, initials, parseWholeNumber } from '../lib/utils'
@@ -26,7 +26,7 @@ export function Button({ variant = 'primary', size = 'md', loading, className, c
       type="button"
       {...rest}
       disabled={disabled || loading}
-      className={cn('inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50', variants[variant], sizes[size], className)}
+      className={cn('inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50', variants[variant], sizes[size], className)}
     >
       {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
       {children}
@@ -113,13 +113,39 @@ export function FilterBar({ children }: { children: ReactNode }) {
   return <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">{children}</div>
 }
 
+// "#0F6B4F", "0f6b4f", "#fa0" (short form) -> "#0f6b4f"; null when it is not a colour code.
+export function normaliseHex(raw: string): string | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(raw.trim())
+  if (!m) return null
+  const hex = m[1]!.length === 3 ? m[1]!.split('').map((c) => c + c).join('') : m[1]!
+  return `#${hex.toLowerCase()}`
+}
+
+/** Colour picker plus a box to paste a hex code (with or without the #). The box only commits a valid code. */
 export function ColorField({ value, onChange, label }: { value: string | null; onChange: (v: string) => void; label: string }) {
+  const [draft, setDraft] = useState<string | null>(null)   // null = show the current value
+  const shown = draft ?? value ?? ''
+  const invalid = draft !== null && draft.trim() !== '' && normaliseHex(draft) === null
   return (
     <Field label={label}>
       {(id) => (
         <div className="flex items-center gap-2">
-          <input id={id} type="color" value={value && /^#[0-9a-f]{6}$/i.test(value) ? value : '#cccccc'} onChange={(e) => onChange(e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-slate-300 bg-white p-0.5" />
-          <span className="font-mono text-xs text-slate-500">{value ?? '—'}</span>
+          <input type="color" aria-label={`${label} picker`} value={value && /^#[0-9a-f]{6}$/i.test(value) ? value : '#cccccc'} onChange={(e) => { setDraft(null); onChange(e.target.value) }} className="h-9 w-12 shrink-0 cursor-pointer rounded border border-slate-300 bg-white p-0.5" />
+          <Input
+            id={id} value={shown} maxLength={7} spellCheck={false} placeholder="#0f6b4f" aria-invalid={invalid || undefined}
+            className={cn('w-32 font-mono text-sm', invalid && 'border-red-500 focus-visible:outline-red-500')}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              const hex = normaliseHex(e.target.value)
+              if (hex) onChange(hex)
+            }}
+            onPaste={(e) => {
+              const hex = normaliseHex(e.clipboardData.getData('text'))
+              if (hex) { e.preventDefault(); setDraft(null); onChange(hex) }
+            }}
+            onBlur={() => setDraft(null)}
+          />
+          {invalid && <span role="alert" className="text-xs text-red-600">Use a code like #0f6b4f</span>}
         </div>
       )}
     </Field>
@@ -182,8 +208,8 @@ export function ImageUpload({ label, value, onChange, hint, preset = 'logo' }: {
 }
 
 // ---------- layout ----------
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('rounded-xl border border-slate-200 bg-white shadow-sm', className)}>{children}</div>
+export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('rounded-xl border border-slate-200 bg-white shadow-sm', className)} {...rest}>{children}</div>
 }
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
@@ -285,12 +311,12 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:p-8" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} className={cn('w-full rounded-xl bg-white shadow-xl outline-none', width)}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <h2 className="min-w-0 break-words text-lg font-bold text-slate-900">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-5" /></button>
         </div>
-        <div className="px-5 py-4">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">{footer}</div>}
+        <div className="px-4 py-4 sm:px-5">{children}</div>
+        {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-4 py-3 sm:px-5">{footer}</div>}
       </div>
     </div>
   )
@@ -326,10 +352,22 @@ export function Toaster() {
 }
 
 // ---------- table ----------
+// On a phone each row becomes a small card (see .stack-table in index.css). The cell labels come from the column headings, copied onto
+// every cell after each render, so no page has to name its cells twice.
 export function Table({ head, children }: { head: ReactNode; children: ReactNode }) {
+  const table = useRef<HTMLTableElement>(null)
+  useLayoutEffect(() => {
+    const el = table.current
+    if (!el) return
+    const labels = [...el.querySelectorAll('thead th')].map((th) => th.textContent?.trim() ?? '')
+    el.querySelectorAll('tbody tr').forEach((tr) => tr.querySelectorAll(':scope > td').forEach((td, i) => {
+      const label = labels[i] ?? ''
+      if (td.getAttribute('data-label') !== label) td.setAttribute('data-label', label)
+    }))
+  })
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table ref={table} className="stack-table w-full text-left text-sm">
         <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">{head}</thead>
         <tbody className="divide-y divide-slate-100">{children}</tbody>
       </table>

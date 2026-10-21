@@ -8,25 +8,29 @@ export const dash = <span className="text-slate-400">—</span>
 export interface DetailRow { label: string; value: ReactNode }
 
 // The read-only "view" dialog shared by every admin list: an optional header (logo, badges), then label / value rows.
-export default function DetailsModal({ title, header, rows, canEdit, onClose, onEdit, children }: {
+export default function DetailsModal({ title, header, rows, canEdit, onClose, onEdit, children, wide }: {
   title: string; header?: ReactNode; rows: DetailRow[]; canEdit: boolean; onClose: () => void; onEdit: () => void; children?: ReactNode
+  /** Landscape layout for a large screen: the facts on the left, the extra content (children) beside them on the right. */
+  wide?: boolean
 }) {
   return (
-    <Modal open onClose={onClose} title={title} size="md" footer={<>
+    <Modal open onClose={onClose} title={title} size={wide ? 'xl' : 'md'} footer={<>
       <Button variant="secondary" onClick={onClose}>Close</Button>
       {canEdit && <Button onClick={onEdit}><Pencil className="size-4" aria-hidden />Edit</Button>}
     </>}>
-      <div className="flex flex-col gap-4">
-        {header}
-        <dl className="rounded-lg border border-slate-200 px-4">
-          {rows.map((r) => (
-            <div key={r.label} className="grid grid-cols-[9rem_minmax(0,1fr)] gap-3 border-b border-slate-100 py-2.5 text-sm last:border-0">
-              <dt className="font-semibold text-slate-500">{r.label}</dt>
-              <dd className="min-w-0 break-words text-slate-900">{r.value ?? dash}</dd>
-            </div>
-          ))}
-        </dl>
-        {children}
+      <div className={wide ? 'grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]' : 'flex flex-col gap-4'}>
+        <div className="flex min-w-0 flex-col gap-4">
+          {header}
+          <dl className="rounded-lg border border-slate-200 px-4">
+            {rows.map((r) => (
+              <div key={r.label} className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 border-b border-slate-100 py-2.5 text-sm last:border-0">
+                <dt className="font-semibold text-slate-500">{r.label}</dt>
+                <dd className="min-w-0 break-words text-slate-900">{r.value ?? dash}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        {children && <div className="min-w-0">{children}</div>}
       </div>
     </Modal>
   )

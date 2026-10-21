@@ -34,7 +34,7 @@ export default function PreInnings({ state, busy, matchId, onStartMatch, onStart
     )
   }
 
-  if (!a.canStartInnings) {
+  if (!a.canStartInnings && !a.canStartSuperOver) {
     if (a.inningsOver && state.status !== 'Completed') {
       return (
         <Card className="p-6">
@@ -55,11 +55,15 @@ export default function PreInnings({ state, busy, matchId, onStartMatch, onStart
   const batting = teams.find((t) => t.id === chosen) ?? teams[0]!
   const ready = striker && nonStriker && striker !== nonStriker && bowler
   const innNo = state.scorecard.length + 1
+  // a tied limited-overs match: the first Super Over innings; the chase that follows is started the same way
+  const superOver = !!a.canStartSuperOver || !!state.innings?.isSuperOver
 
   return (
     <Card className="p-6">
-      <h2 className="text-lg font-bold text-slate-900">Start innings {innNo}</h2>
-      <p className="mt-1 text-sm text-slate-600">{state.tossText}</p>
+      <h2 className="text-lg font-bold text-slate-900">{superOver ? (a.canStartSuperOver ? 'Match tied: start a Super Over' : 'Super Over: the chase') : `Start innings ${innNo}`}</h2>
+      <p className="mt-1 text-sm text-slate-600">{superOver
+        ? (a.canStartSuperOver ? 'One over each and two wickets. The side that batted second bats first.' : `${state.innings?.battingTeam.shortName} scored ${state.innings?.runs}/${state.innings?.wickets}. Pick the openers for the chase.`)
+        : state.tossText}</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label={a.followOnAvailable ? 'Batting side (the leading side may enforce the follow-on)' : 'Batting side'}>
           {(id) => (
@@ -80,7 +84,7 @@ export default function PreInnings({ state, busy, matchId, onStartMatch, onStart
         <Field label="Opening bowler">{(id) => <Select id={id} value={bowler} onChange={(e) => setBowler(e.target.value)}><option value="">Select…</option>{fieldingXI.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>}</Field>
       </div>
       <Button className="mt-5" size="lg" disabled={!ready} loading={busy}
-        onClick={() => onStart({ battingTeamId: chosen, strikerId: striker, nonStrikerId: nonStriker, bowlerId: bowler })}>Start innings</Button>
+        onClick={() => onStart({ battingTeamId: chosen, strikerId: striker, nonStrikerId: nonStriker, bowlerId: bowler, ...(a.canStartSuperOver ? { superOver: true } : {}) })}>{superOver ? 'Start Super Over innings' : 'Start innings'}</Button>
     </Card>
   )
 }

@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { applyTheme, useTheme } from './store/useTheme'
 import AppShell from './layouts/AppShell'
 import RequireAuth from './components/RequireAuth'
 import { Spinner, Toaster } from './components/ui'
@@ -26,9 +27,25 @@ const TournamentsPage = lazy(() => import('./pages/admin/TournamentsPage'))
 const RulesPage = lazy(() => import('./pages/admin/RulesPage'))
 const ThemesPage = lazy(() => import('./pages/admin/ThemesPage'))
 
+/** Keeps <html class="dark"> in step with the chosen theme, the device setting (for "Auto") and the page (the OBS overlay is never dark). */
+function ThemeApplier() {
+  const mode = useTheme((s) => s.mode)
+  const { pathname } = useLocation()
+  useEffect(() => {
+    applyTheme(mode, pathname)
+    if (mode !== 'system' || typeof matchMedia !== 'function') return
+    const query = matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme('system', pathname)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [mode, pathname])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <ThemeApplier />
       <RouteBoundary>
       <Suspense fallback={<Spinner />}>
         <Routes>

@@ -72,16 +72,25 @@ export function UndoModal({ lastBall, onConfirm, onClose }: { lastBall: LastBall
   )
 }
 
-export function PenaltyModal({ onConfirm, onClose }: { onConfirm: (runs: number, reason: string) => void; onClose: () => void }) {
+export function PenaltyModal({ battingName, bowlingName, onConfirm, onClose }: {
+  battingName: string; bowlingName: string; onConfirm: (runs: number, reason: string, toFieldingSide: boolean) => void; onClose: () => void
+}) {
   const [runs, setRuns] = useState(5)
   const [reason, setReason] = useState('')
+  const [side, setSide] = useState<'batting' | 'fielding'>('batting')
   const ok = runs !== 0 && Math.abs(runs) <= 25
   return (
     <Modal open onClose={onClose} title="Penalty runs" size="sm" footer={<>
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
-      <Button disabled={!ok} onClick={() => onConfirm(runs, reason.trim() || 'Penalty runs')}>Apply</Button>
+      <Button disabled={!ok} onClick={() => onConfirm(runs, reason.trim() || 'Penalty runs', side === 'fielding')}>Apply</Button>
     </>}>
       <div className="flex flex-col gap-3">
+        <Field label="Awarded to" hint={side === 'fielding' ? `${bowlingName} get the runs in their innings (added when they bat, or to their score if they have batted).` : undefined}>
+          {(id) => <Select id={id} value={side} onChange={(e) => setSide(e.target.value as 'batting' | 'fielding')}>
+            <option value="batting">{battingName} (batting side)</option>
+            <option value="fielding">{bowlingName} (bowling side)</option>
+          </Select>}
+        </Field>
         <Field label="Runs (negative corrects a mistake)" hint="Between -25 and 25, not 0.">
           {(id) => <Input id={id} type="number" min={-25} max={25} value={runs} onChange={(e) => setRuns(Number(e.target.value))} />}
         </Field>
@@ -189,3 +198,59 @@ export function CheatSheet({ onClose }: { onClose: () => void }) {
   )
 }
 
+
+/** Mark batting-side players absent hurt (they cannot bat in this innings and do not count towards "all out"), or bring them back. */
+export function AbsentHurtModal({ available, absent, busy, onSet, onClose }: {
+  available: PlayerLite[]; absent: PlayerLite[]; busy: boolean; onSet: (playerId: string, absent: boolean) => void; onClose: () => void
+}) {
+  const row = (p: PlayerLite, isAbsent: boolean) => (
+    <li key={p.id} className="flex items-center gap-3 rounded-lg border border-slate-300 bg-white p-2">
+      <Avatar name={p.name} src={p.photoUrl} size={32} /><span className="min-w-0 flex-1 truncate font-semibold">{p.name}</span>
+      <Button size="sm" variant={isAbsent ? 'secondary' : 'warning'} disabled={busy} onClick={() => onSet(p.id, !isAbsent)}>{isAbsent ? 'Back available' : 'Absent hurt'}</Button>
+    </li>
+  )
+  return (
+    <Modal open onClose={onClose} title="Absent hurt" size="md" footer={<Button onClick={onClose}>Done</Button>}>
+      <p className="mb-3 text-sm text-slate-600">A player who cannot bat in this innings (for example injured in the field). The innings ends when fewer than two batters are left who are not out and not absent. A batter at the crease is retired instead.</p>
+      {absent.length > 0 && <ul className="mb-3 grid gap-2" aria-label="Absent hurt">{absent.map((p) => row(p, true))}</ul>}
+      {available.length === 0 && absent.length === 0 && <p role="status" className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">No one left who has not batted.</p>}
+      <ul className="grid gap-2" aria-label="Yet to bat">{available.map((p) => row(p, false))}</ul>
+    </Modal>
+  )
+}
+
+/** Rain-reduced overs and/or a DLS target, worked out by the scorer (from the DLS app or table). The app does not calculate DLS. */
+export function ReviseModal({ oversNow, maxOvers, hasTarget, targetNow, onConfirm, onClose }: {
+  oversNow: number; maxOvers: number; hasTarget: boolean; targetNow: number | null
+  onConfirm: (overs: number | null, target: number | null, reason: string) => void; onClose: () => void
+}) {
+  const [overs, setOvers] = useState(String(oversNow))
+  const [target, setTarget] = useState(targetNow === null ? '' : String(targetNow))
+  const [reason, setReason] = useState('Rain interruption (DLS)')
+  const o = overs.trim() === '' ? null : Number(overs)
+  const t = target.trim() === '' ? null : Number(target)
+  const oversChanged = o !== null && o !== oversNow
+  const targetChanged = hasTarget && t !== null && t !== targetNow
+  const oversBad = o !== null && (!Number.isInteger(o) || o < 1 || o > maxOvers)
+  const targetBad = t !== null && (!Number.isInteger(t) || t < 1)
+  const ok = (oversChanged || targetChanged) && !oversBad && !targetBad
+  return (
+    <Modal open onClose={onClose} title="Revise overs / target (rain, DLS)" size="sm" footer={<>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <Button disabled={!ok} onClick={() => onConfirm(oversChanged ? o : null, targetChanged ? t : null, reason.trim())}>Apply</Button>
+    </>}>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-slate-600">Enter the numbers the umpires give you. The innings is then played over the new overs and the scorebug and result say DLS.</p>
+        <Field label="Overs in this innings" error={oversBad ? `Whole overs from 1 to ${maxOvers}.` : undefined}>
+          {(id) => <Input id={id} type="number" inputMode="numeric" min={1} max={maxOvers} value={overs} onChange={(e) => setOvers(e.target.value)} />}
+        </Field>
+        {hasTarget && (
+          <Field label="Revised target (runs to win)" error={targetBad ? 'Enter a whole number.' : undefined}>
+            {(id) => <Input id={id} type="number" inputMode="numeric" min={1} value={target} onChange={(e) => setTarget(e.target.value)} />}
+          </Field>
+        )}
+        <Field label="Reason (kept in the audit log)">{(id) => <Input id={id} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
+      </div>
+    </Modal>
+  )
+}

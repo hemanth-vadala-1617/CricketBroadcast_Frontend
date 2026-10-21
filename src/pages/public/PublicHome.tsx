@@ -1,5 +1,6 @@
-﻿import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import ThemeToggle from '../../components/ThemeToggle'
 import { Radio } from 'lucide-react'
 import { api } from '../../lib/api'
 import { formatDateTime } from '../../lib/utils'
@@ -45,7 +46,10 @@ export default function PublicHome() {
       <header className="bg-slate-900 text-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-5">
           <div className="flex items-center gap-2"><Radio className="size-6 text-emerald-400" aria-hidden /><span className="font-display text-2xl font-semibold tracking-wide">CRICKET STREAM</span></div>
-          <Link to={user ? '/admin' : '/login'} className="text-xs font-medium text-slate-400 hover:text-white">{user ? 'Open admin' : 'Staff sign in'}</Link>
+          <div className="flex items-center gap-3">
+            <Link to={user ? '/admin' : '/login'} className="text-xs font-medium text-slate-400 hover:text-white">{user ? 'Open admin' : 'Staff sign in'}</Link>
+            <ThemeToggle onDark />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">

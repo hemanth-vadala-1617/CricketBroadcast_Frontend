@@ -9,6 +9,18 @@ function darken(hex: string) {
 
 const chip = (bg: string, fg = '#fff') => ({ background: bg, color: fg, borderRadius: 8, padding: '2px 14px', fontWeight: 700, letterSpacing: 1 } as const)
 
+/** "NEED 76 RUNS FROM 28 BALLS" while a limited-overs chase is on (null otherwise, then the server's lead text is used). Says so when the target is reached. */
+export function chaseLine(state: MatchState): string | null {
+  const inn = state.innings
+  if (!inn || inn.target === null || state.isTest) return null
+  const need = inn.runsRequired
+  if (need === null) return null
+  if (need <= 0) return `${inn.battingTeam.shortName} HAVE REACHED THE TARGET`
+  const balls = inn.ballsRemaining
+  if (balls === null || balls <= 0) return `${inn.battingTeam.shortName} NEED ${need} ${need === 1 ? 'RUN' : 'RUNS'}`
+  return `${inn.battingTeam.shortName} NEED ${need} ${need === 1 ? 'RUN' : 'RUNS'} FROM ${balls} ${balls === 1 ? 'BALL' : 'BALLS'}`
+}
+
 /** Top bar + the two info strips (the TV scorebug from the reference). */
 export function Scorebug({ state, winProb, boxDelayMs = 0 }: { state: MatchState; winProb?: ReactNode; boxDelayMs?: number }) {
   const inn = state.innings
@@ -60,8 +72,8 @@ export function Scorebug({ state, winProb, boxDelayMs = 0 }: { state: MatchState
       <div className="font-display" style={{ height: 54, display: 'flex', alignItems: 'center', gap: 44, padding: '0 32px', background: theme.secondaryColor, fontSize: 36, fontWeight: 600 }}>
         <span>{`CRR: ${inn.currentRunRate.toFixed(2)}`}</span>
         <span>{`P'SHIP: ${inn.partnership.runs}(${inn.partnership.balls})`}</span>
-        {inn.target !== null && <span>{`Target: ${inn.target}`}</span>}
-        <span style={{ marginLeft: 'auto', color: theme.accentColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{inn.leadText ?? ''}</span>
+        {inn.target !== null && <span data-testid="target" style={{ ...chip(theme.accentColor, '#111'), fontSize: 34 }}>{`TARGET ${inn.target}${inn.isDls ? ' (DLS)' : ''}`}</span>}
+        <span data-testid="chase-line" style={{ marginLeft: 'auto', color: theme.accentColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chaseLine(state) ?? inn.leadText ?? ''}</span>
       </div>
 
       {/* ---- strip 2: clock / limited-overs status / win probability ---- */}
@@ -74,9 +86,13 @@ export function Scorebug({ state, winProb, boxDelayMs = 0 }: { state: MatchState
         ) : (
           <>
             <span style={chip('rgba(0,0,0,.35)')}>{state.oversPerInnings > 0 ? `Overs ${inn.overs}/${state.oversPerInnings}` : `Overs ${inn.overs}`}</span>
+            {inn.isSuperOver && <span data-testid="super-over-chip" style={chip('#dc2626')}>SUPER OVER</span>}
+            {inn.isDls && !inn.isSuperOver && <span data-testid="dls-chip" style={chip('#0369a1')}>DLS</span>}
             {inn.powerplay && <span style={chip('#0ea5e9')}>POWERPLAY</span>}
+            {inn.powerSurge?.active && <span data-testid="power-surge-chip" style={chip('#7c3aed')}>{`POWER SURGE${inn.powerSurge.oversLeft > 0 ? ` · ${inn.powerSurge.oversLeft} ${inn.powerSurge.oversLeft === 1 ? 'OVER' : 'OVERS'} LEFT` : ''}`}</span>}
           </>
         )}
+        {inn.isFollowOn && <span data-testid="follow-on-chip" style={chip('#7c2d12')}>FOLLOW-ON</span>}
         {inn.freeHit && <span className="anim-flash" style={chip('#f97316')}>FREE HIT</span>}
         {inn.newBallDue && <span style={chip('#facc15', '#1c1917')}>NEW BALL DUE</span>}
         <div style={{ marginLeft: 'auto' }}>{winProb}</div>

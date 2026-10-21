@@ -2,7 +2,7 @@
 
 /** What the scorer pressed. The server decides what is legal; these builders only shape the request. */
 export type PadAction =
-  | { kind: 'runs'; runs: number; boundary?: boolean }
+  | { kind: 'runs'; runs: number; boundary?: boolean; shortRuns?: number }
   | { kind: 'wide'; extraRuns: number; boundary?: boolean }
   | { kind: 'noball'; bat: number; boundary?: boolean; secondary?: 'Bye' | 'LegBye'; extraRuns?: number }
   | { kind: 'bye' | 'legbye'; runs: number; boundary?: boolean }
@@ -17,7 +17,7 @@ export function buildBall(action: PadAction, clientRequestId: string): ScoreBall
   }
   switch (action.kind) {
     case 'runs':
-      return { ...base, runsBat: action.runs, isBoundary: !!action.boundary || action.runs === 6 }
+      return { ...base, runsBat: action.runs, isBoundary: !!action.boundary || action.runs === 6, ...(action.shortRuns ? { shortRuns: action.shortRuns } : {}) }
     case 'wide':
       return { ...base, extrasType: 'Wide', extraRuns: action.extraRuns, isBoundary: !!action.boundary }
     case 'noball': {
@@ -78,7 +78,7 @@ export function validateWicket(a: Extract<PadAction, { kind: 'wicket' }>, strike
 
 export function actionLabel(a: PadAction): string {
   switch (a.kind) {
-    case 'runs': return String(a.runs)
+    case 'runs': return a.shortRuns ? `${a.runs - a.shortRuns} (short)` : String(a.runs)
     case 'wide': return a.extraRuns ? `WD+${a.extraRuns}` : 'WD'
     case 'noball': return a.bat || a.extraRuns ? `NB+${a.bat + (a.extraRuns ?? 0)}` : 'NB'
     case 'bye': return `B${a.runs}`

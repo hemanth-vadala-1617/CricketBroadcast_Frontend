@@ -70,9 +70,9 @@ describe('BroadcastOverlay - reference Test-match scorebug', () => {
 describe('BroadcastOverlay - limited overs', () => {
   it('shows target, required rate, free hit and powerplay', () => {
     render(<BroadcastOverlay state={limitedOversState()} />)
-    expect(screen.getByText('Target: 181')).toBeInTheDocument()
+    expect(screen.getByText('TARGET 181')).toBeInTheDocument()
     expect(screen.getByText('RRR : 9.40')).toBeInTheDocument()
-    expect(screen.getByText('BAN need 141 runs in 90 balls')).toBeInTheDocument()
+    expect(screen.getByText('BAN NEED 141 RUNS FROM 90 BALLS')).toBeInTheDocument()
     expect(screen.getByText('FREE HIT')).toBeInTheDocument()
     expect(screen.getByText('POWERPLAY')).toBeInTheDocument()
     expect(screen.getByText('Overs 5.0/20')).toBeInTheDocument()

@@ -1,8 +1,9 @@
-﻿import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Radio } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
 import { Button, Field, Input } from '../components/ui'
+import ThemeToggle from '../components/ThemeToggle'
 
 export default function Login() {
   const user = useAuthStore((s) => s.user)
@@ -28,7 +29,8 @@ export default function Login() {
   }
 
   return (
-    <div className="grid min-h-full place-items-center bg-slate-900 p-4">
+    <div className="relative grid min-h-full place-items-center bg-slate-900 p-4">
+      <div className="absolute right-4 top-4"><ThemeToggle onDark /></div>
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl" aria-label="Sign in">
         <div className="mb-6 flex items-center gap-2 text-slate-900">
           <Radio className="size-7 text-brand" aria-hidden />

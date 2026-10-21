@@ -16,7 +16,7 @@ const chipClass: Record<BallKind, string> = {
 
 export function BallChip({ label, kind, big }: { label: string; kind: BallKind; big?: boolean }) {
   return (
-    <span aria-label={`${kind} ${label}`} className={cn('inline-grid place-items-center rounded-full font-bold', big ? 'size-16 text-2xl' : 'min-w-9 px-1 h-9 text-sm', chipClass[kind])}>
+    <span aria-label={`${kind} ${label}`} className={cn('inline-grid place-items-center rounded-full font-bold', big ? 'h-16 min-w-16 px-4 text-2xl whitespace-nowrap' : 'min-w-9 px-1 h-9 text-sm whitespace-nowrap', chipClass[kind])}>
       {kind === 'Dot' ? '•' : label}
     </span>
   )
@@ -29,7 +29,7 @@ function BatterRow({ b }: { b: Batter | null }) {
       <Avatar name={b.name} src={b.photoUrl} size={36} />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold text-slate-900">{b.name}{b.onStrike && <span aria-label="on strike" className="ml-1 text-emerald-600"> ●</span>}</p>
-        <p className="text-xs text-slate-500">4s {b.fours} · 6s {b.sixes} · SR {b.strikeRate.toFixed(1)}</p>
+        <p className="truncate text-xs text-slate-500">4s {b.fours} · 6s {b.sixes} · SR {b.strikeRate.toFixed(1)}</p>
       </div>
       <p className="font-mono text-xl font-bold tabular-nums">{b.runs}<span className="text-sm font-medium text-slate-500"> ({b.balls})</span></p>
     </div>
@@ -43,7 +43,9 @@ export default function ScoreStrip({ state }: { state: MatchState }) {
   const need = inn.runsRequired !== null && inn.target !== null
   return (
     <Card className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Fixed heights below: this card sits above the scoring pad, and anything here growing or shrinking (the first last-ball bubble,
+          a wrapping line, a longer over) moved the pad down the page under the scorer's finger, so taps missed the button. */}
+      <div className="flex min-h-16 flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <TeamBadge team={inn.battingTeam} size={44} />
           <div>
@@ -65,7 +67,7 @@ export default function ScoreStrip({ state }: { state: MatchState }) {
         )}
       </div>
 
-      <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+      <dl className="mt-3 flex min-h-5 flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
         <div><dt className="inline text-slate-500">CRR </dt><dd className="inline font-semibold">{inn.currentRunRate.toFixed(2)}</dd></div>
         <div><dt className="inline text-slate-500">P'ship </dt><dd className="inline font-semibold">{inn.partnership.runs} ({inn.partnership.balls})</dd></div>
         <div><dt className="inline text-slate-500">Extras </dt><dd className="inline font-semibold">{inn.extras}</dd></div>
@@ -84,7 +86,7 @@ export default function ScoreStrip({ state }: { state: MatchState }) {
               <Avatar name={inn.bowler.name} src={inn.bowler.photoUrl} size={36} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-slate-900">{inn.bowler.name}</p>
-                <p className="text-xs text-slate-500">Mdns {inn.bowler.maidens} · Econ {inn.bowler.economy.toFixed(2)}</p>
+                <p className="truncate text-xs text-slate-500">Mdns {inn.bowler.maidens} · Econ {inn.bowler.economy.toFixed(2)}</p>
               </div>
               <p className="font-mono text-xl font-bold tabular-nums">{inn.bowler.wickets}-{inn.bowler.runs}<span className="text-sm font-medium text-slate-500"> ({inn.bowler.overs})</span></p>
             </>
@@ -92,7 +94,7 @@ export default function ScoreStrip({ state }: { state: MatchState }) {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="This over">
+      <div className="mt-4 flex min-h-9 flex-wrap items-center gap-2" aria-label="This over">
         <span className="text-xs font-semibold uppercase text-slate-500">{over ? `Over ${over.overNumber}` : 'This over'}</span>
         {over?.balls.length ? over.balls.map((c, i) => <BallChip key={i} label={c.label} kind={c.kind} />) : <span className="text-sm text-slate-400">No balls yet</span>}
         {over && <span className="ml-1 text-sm font-semibold text-slate-600">= {over.runs}</span>}

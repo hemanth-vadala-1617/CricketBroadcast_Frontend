@@ -9,6 +9,78 @@
 }
 
 html, body, #root { height: 100%; }
+
+/* A bare `grid` has one automatic column, which grows to its widest content and pushes the page sideways on a phone.
+   Make the default column shrinkable; any grid-cols-* utility still wins because utilities sit in a later layer. */
+@layer base { .grid { grid-template-columns: minmax(0, 1fr); } }
+body { -webkit-text-size-adjust: 100%; }
+
+/* ---------- dark mode ----------
+   The app is styled with fixed light-theme colour utilities. Rather than touch every screen, the dark theme re-maps exactly those
+   utilities below when <html> has the "dark" class (see store/useTheme.ts). The OBS overlay paints with its own inline colours and never gets the class. */
+@custom-variant dark (&:where(.dark, .dark *));
+html.dark { color-scheme: dark; }
+.dark body { background: #0b1220; color: #e2e8f0; }
+
+/* surfaces */
+.dark .bg-white { background-color: #131c30; }
+.dark .bg-slate-50 { background-color: #182238; }
+.dark .bg-slate-100 { background-color: #1e2a42; }
+.dark .bg-slate-200 { background-color: #2a374f; }
+.dark .hover\:bg-white:hover { background-color: #1e2a42; }
+.dark .hover\:bg-slate-50:hover { background-color: #1b2740; }
+.dark .hover\:bg-slate-100:hover, .dark .focus\:bg-slate-100:focus { background-color: #223049; }
+/* lines */
+.dark .border-slate-100 { border-color: #1f2b43; }
+.dark .border-slate-200 { border-color: #2a374f; }
+.dark .border-slate-300 { border-color: #3a4960; }
+.dark .ring-slate-200 { --tw-ring-color: #2a374f; }
+.dark .divide-slate-100 > :not(:last-child) { border-color: #1f2b43; }
+.dark .divide-slate-200 > :not(:last-child) { border-color: #2a374f; }
+/* text on the light surfaces */
+.dark .text-slate-500 { color: #94a3b8; }
+.dark .text-slate-600 { color: #a8b5c9; }
+.dark .text-slate-700 { color: #c3cedd; }
+.dark .text-slate-800, .dark .hover\:text-slate-800:hover { color: #e2e8f0; }
+.dark .text-slate-900 { color: #f1f5f9; }
+.dark .placeholder\:text-slate-400::placeholder { color: #64748b; }
+/* coloured notices and badges: dark tints with light text */
+.dark .bg-red-50, .dark .bg-rose-100 { background-color: rgba(239, 68, 68, .14); }
+.dark .bg-red-100 { background-color: rgba(239, 68, 68, .22); }
+.dark .bg-emerald-50, .dark .bg-emerald-50\/70, .dark .bg-teal-50, .dark .hover\:bg-emerald-50:hover { background-color: rgba(16, 185, 129, .14); }
+.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, .22); }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, .14); }
+.dark .bg-amber-100, .dark .bg-orange-100 { background-color: rgba(245, 158, 11, .22); }
+.dark .bg-violet-50 { background-color: rgba(139, 92, 246, .16); }
+.dark .bg-violet-100, .dark .bg-purple-100 { background-color: rgba(139, 92, 246, .26); }
+.dark .bg-blue-100 { background-color: rgba(59, 130, 246, .24); }
+.dark .text-red-600, .dark .text-red-700, .dark .text-red-800, .dark .text-rose-700 { color: #fca5a5; }
+.dark .text-amber-500, .dark .text-amber-600, .dark .text-amber-700, .dark .text-amber-800, .dark .text-amber-900, .dark .text-orange-900 { color: #fcd34d; }
+/* the see-through (/80) text classes are separate utilities, so they need their own bright colour: the small explanation lines in the
+   "Select batter / bowler" and "Power Surge" cards stayed dark on dark */
+.dark .text-amber-900\/80 { color: #fde68a; }
+.dark .text-violet-900\/80 { color: #ddd6fe; }
+.dark .text-emerald-600, .dark .text-emerald-700, .dark .text-emerald-800, .dark .text-teal-900 { color: #6ee7b7; }
+.dark .text-violet-900, .dark .text-purple-700, .dark .text-purple-800 { color: #ddd6fe; }
+.dark .text-blue-800 { color: #bfdbfe; }
+.dark .border-red-200 { border-color: rgba(239, 68, 68, .4); }
+.dark .border-amber-200, .dark .border-amber-300 { border-color: rgba(245, 158, 11, .4); }
+.dark .border-emerald-200, .dark .border-emerald-400, .dark .border-teal-300 { border-color: rgba(16, 185, 129, .45); }
+.dark .border-violet-300, .dark .border-purple-200, .dark .border-blue-200 { border-color: rgba(139, 92, 246, .45); }
+/* the picture-and-text cards keep their own light-on-dark look; only native widgets need to know */
+.dark input, .dark select, .dark textarea { color-scheme: dark; }
+
+/* Phones: a list table turns into one card per row, each value labelled by its column heading (labels are set by <Table>). */
+@media (max-width: 639px) {
+  table.stack-table { min-width: 0 !important; }
+  .stack-table thead { display: none; }
+  .stack-table, .stack-table tbody, .stack-table tr { display: block; width: 100%; }
+  .stack-table tbody tr { padding: .5rem .75rem; }
+  .stack-table td { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .3rem 0 !important; text-align: right; white-space: normal !important; }
+  .stack-table td::before { content: attr(data-label); flex: none; max-width: 40%; text-align: left; font-size: .7rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }
+  .stack-table td[data-label=""]::before { display: none; }
+  .stack-table td > * { min-width: 0; }
+}
 body { margin: 0; font-family: var(--font-sans); background: #f1f5f9; color: #0f172a; }
 
 /* The overlay is composited over video by OBS: nothing may paint a background or scroll. */
@@ -56,6 +128,26 @@ html.overlay-mode, html.overlay-mode body, html.overlay-mode #root { background:
   93% { transform: translateX(0); opacity: 1; }
   100% { transform: translateX(-640px); opacity: 0; }
 }
+@keyframes rain-fall { from { transform: translate3d(0, 0, 0) rotate(12deg); } to { transform: translate3d(-260px, 1400px, 0) rotate(12deg); } }
+@keyframes rain-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { [data-drop] { animation: none !important; } }
+@keyframes sm-in {
+  0% { transform: translateX(-1400px) skewX(-10deg); opacity: 0; }
+  7% { transform: translateX(30px) skewX(-10deg); opacity: 1; }
+  10% { transform: translateX(0) skewX(0); }
+  92% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(-1400px); opacity: 0; }
+}
+@keyframes ms-in {
+  0% { transform: translateX(700px); opacity: 0; }
+  8% { transform: translateX(-24px); opacity: 1; }
+  11% { transform: translateX(0); }
+  92% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(700px); opacity: 0; }
+}
+@keyframes duck-run { 0% { transform: translateX(-260px); } 100% { transform: translateX(2200px); } }
+@keyframes duck-hop { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-22px) rotate(4deg); } }
+@keyframes break-icon { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1) rotate(-4deg); } }
 @keyframes lb-ring { 0% { transform: scale(1); opacity: .95; } 100% { transform: scale(1.22, 1.55); opacity: 0; } }
 @keyframes lb-rays { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes lb-shake { 0%, 100% { transform: translateX(0); } 15% { transform: translateX(-12px); } 30% { transform: translateX(12px); } 45% { transform: translateX(-9px); } 60% { transform: translateX(9px); } 75% { transform: translateX(-4px); } 90% { transform: translateX(4px); } }

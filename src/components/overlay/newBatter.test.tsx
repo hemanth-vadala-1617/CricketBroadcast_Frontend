@@ -133,3 +133,50 @@ describe('departing batter stays on his card until the introduction ends', () =>
     expect(again.arrival?.batter.playerId).toBe('c')
   })
 })
+
+describe('rain delay', () => {
+  it('shows falling rain only during a rain delay', async () => {
+    const { BroadcastOverlay } = await import('./BroadcastOverlay')
+    const base = stateWith(batter('a'), batter('b'))
+    const { rerender } = render(<BroadcastOverlay state={base} />)
+    expect(screen.queryByTestId('rain-effect')).toBeNull()
+    rerender(<BroadcastOverlay state={{ ...base, status: 'RainDelay' }} />)
+    expect(screen.getByTestId('rain-effect').querySelectorAll('[data-drop]').length).toBeGreaterThan(50)
+    expect(screen.getByText('Play suspended')).toBeInTheDocument()
+    rerender(<BroadcastOverlay state={{ ...base, status: 'Paused' }} />)
+    expect(screen.queryByTestId('rain-effect')).toBeNull()
+    rerender(<BroadcastOverlay state={base} />)
+    expect(screen.queryByTestId('rain-effect')).toBeNull()
+  })
+})
+
+describe('chasing runs', () => {
+  it('shows the target and what is needed, in the scorebug of a chase', async () => {
+    const { Scorebug } = await import('./Scorebug')
+    const { limitedOversState } = await import('./fixtures')
+    render(<Scorebug state={limitedOversState()} />)
+    expect(screen.getByTestId('target')).toHaveTextContent('TARGET 181')
+    expect(screen.getByTestId('chase-line')).toHaveTextContent('BAN NEED 141 RUNS FROM 90 BALLS')
+  })
+
+  it('words the end of a chase, and uses the server text for a Test match', async () => {
+    const { chaseLine } = await import('./Scorebug')
+    const { limitedOversState, referenceState } = await import('./fixtures')
+    const t20 = limitedOversState()
+    const done = { ...t20, innings: { ...t20.innings!, runsRequired: 0 } }
+    expect(chaseLine(done)).toBe('BAN HAVE REACHED THE TARGET')
+    expect(chaseLine({ ...t20, innings: { ...t20.innings!, runsRequired: 1, ballsRemaining: 1 } })).toBe('BAN NEED 1 RUN FROM 1 BALL')
+    expect(chaseLine({ ...t20, innings: { ...t20.innings!, runsRequired: 4, ballsRemaining: 0 } })).toBe('BAN NEED 4 RUNS')
+    expect(chaseLine(referenceState())).toBeNull()
+  })
+
+  it('says what the second side must chase at the innings break', async () => {
+    const { chaseTargetLine } = await import('./BroadcastOverlay')
+    const { limitedOversState } = await import('./fixtures')
+    const t20 = limitedOversState()
+    const first = { inningsNumber: 1, battingTeam: t20.awayTeam, runs: 180, wickets: 6, overs: '20.0', extras: 5, runRate: 9, extrasText: '', isCompleted: true, batting: [], bowling: [], fallOfWickets: [], yetToBat: [] } as unknown as MatchState['scorecard'][number]
+    const state = { ...t20, status: 'InningsBreak' as const, scorecard: [first] }
+    expect(chaseTargetLine(state)).toBe(`${t20.homeTeam.name} need 181 runs to win in 20 overs`)
+    expect(chaseTargetLine({ ...state, scorecard: [] })).toBeNull()
+  })
+})

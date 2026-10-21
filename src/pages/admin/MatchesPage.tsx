@@ -137,7 +137,7 @@ export default function MatchesPage() {
         isEmpty={rows.length === 0} emptyTitle={filtered ? 'No matches match these filters.' : 'No matches yet.'}
         emptyHint={filtered ? undefined : 'Schedule your first match. You need a tournament, two teams, a venue and match rules.'}>
         {/* min width keeps every column readable; narrower screens get a horizontal scroller instead of squeezed rows */}
-        <div className="[&_table]:min-w-[980px]">
+        <div className="sm:[&_table]:min-w-[980px]">
         <Table head={<tr><Th>Match</Th><Th>Tournament</Th><Th>Venue</Th><Th>Start</Th><Th>Status</Th><Th className="text-center">Open</Th></tr>}>
           {rows.map((m) => (
             <tr key={m.id} className="cursor-pointer hover:bg-slate-50" onClick={rowClick(() => setViewing(m))}>

@@ -6,6 +6,7 @@ import { api, errorMessage } from '../../lib/api'
 import { overlayUrl } from '../../lib/overlayUrl'
 import { toast } from '../../store/useToast'
 import type { GraphicKey, MatchState } from '../../lib/types'
+import ThemeToggle from '../../components/ThemeToggle'
 import { Badge, Button, Card, Field, ImageUpload, Input, Spinner } from '../../components/ui'
 import { normalise, type Prob, type ProbKey } from './winProb'
 
@@ -35,7 +36,7 @@ function PreviewFrame({ matchId }: { matchId: string }) {
   }, [])
   return (
     <div ref={box} className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-      <iframe title="Overlay preview" src={`/overlay/${matchId}?bg=1`} width={1920} height={1080} className="absolute left-0 top-0 border-0" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }} />
+      <iframe title="Overlay preview" src={`/overlay/${matchId}?bg=1&sound=0`} width={1920} height={1080} className="absolute left-0 top-0 border-0" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }} />
     </div>
   )
 }
@@ -117,6 +118,7 @@ export default function ProducerConsole() {
             <p className="text-sm text-slate-500">{state.title}</p>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Badge tone={status === 'live' ? 'green' : 'amber'}>{status === 'live' ? 'Connected' : `Socket ${status}`}</Badge>
             <Link to={`/scorer/${matchId}`} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Target className="size-4" aria-hidden />Scorer console</Link>
             <Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(overlayUrl(matchId)).then(() => toast.success('Overlay URL copied. Paste it into an OBS Browser Source (1920x1080).'), () => toast.error('Could not copy; select the URL manually.')) }}>

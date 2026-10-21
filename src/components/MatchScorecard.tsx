@@ -120,7 +120,7 @@ export default function MatchScorecard({ state }: { state: MatchState }) {
         )}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">{`${ordinal(active.inningsNumber)} innings`}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">{active.isSuperOver ? 'Super Over' : `${ordinal(active.inningsNumber)} innings${active.isFollowOn ? ' (follow-on)' : ''}`}</p>
             <h2 className="font-display text-3xl font-bold uppercase tracking-wide">{active.battingTeam.name}</h2>
           </div>
           <div className="font-display leading-none"><b className="text-5xl">{`${active.runs}-${active.wickets}`}</b><span className="ml-2 text-2xl font-semibold text-white/75">{` (${active.overs} Ov)`}</span></div>
@@ -160,6 +160,15 @@ export default function MatchScorecard({ state }: { state: MatchState }) {
               <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">Yet to bat</span>
               <ul className="flex flex-wrap gap-2">
                 {active.yetToBat.map((n) => <li key={n} className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">{n}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {(active.absentHurt?.length ?? 0) > 0 && (
+            <div data-testid="absent-hurt" className="px-5 pb-4">
+              <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">Absent hurt</span>
+              <ul className="flex flex-wrap gap-2">
+                {active.absentHurt!.map((n) => <li key={n} className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">{n}</li>)}
               </ul>
             </div>
           )}

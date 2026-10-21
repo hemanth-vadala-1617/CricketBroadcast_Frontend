@@ -1,5 +1,6 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import ThemeToggle from '../../components/ThemeToggle'
 import { ArrowLeft } from 'lucide-react'
 import { useLiveMatch } from '../../hooks/useLiveMatch'
 import type { BallChip, MatchState } from '../../lib/types'
@@ -84,7 +85,7 @@ export default function PublicMatch() {
         <div className="mx-auto max-w-4xl px-4 py-5">
           <div className="mb-3 flex items-center justify-between gap-2 text-xs text-slate-400">
             <Link to="/" className="inline-flex items-center gap-1 hover:text-white"><ArrowLeft className="size-3.5" aria-hidden />All matches</Link>
-            <span className="flex items-center gap-2"><StatusBadge status={state.status} />{status !== 'live' && <Badge tone="amber">{status === 'reconnecting' ? 'Reconnecting…' : 'Offline'}</Badge>}</span>
+            <span className="flex items-center gap-2"><ThemeToggle onDark className="!p-1.5" /><StatusBadge status={state.status} />{status !== 'live' && <Badge tone="amber">{status === 'reconnecting' ? 'Reconnecting…' : 'Offline'}</Badge>}</span>
           </div>
           <p className="text-sm text-slate-300">{`${state.tournamentName} • ${state.venueName}`}</p>
           {inn ? (

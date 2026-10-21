@@ -5,8 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Follows the host the page was opened from (192.168.1.6 -> http://192.168.1.6:5141) unless VITE_API_URL is set.
-export const API_URL: string = (import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5141`).replace(/\/$/, '')
+// Where the API is. Set VITE_API_URL to point at a different API host.
+// In development the page and the API share ONE address: the dev server forwards /api, /hubs and /uploads to the API on port 5141
+// (see vite.config.ts), so the same setup works on localhost, on the LAN, over Tailscale and through a single public tunnel link.
+// A production build with no VITE_API_URL keeps the old behaviour: the API on port 5141 of the host the page came from.
+export const API_URL: string = (import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : `${window.location.protocol}//${window.location.hostname}:5141`)).replace(/\/$/, '')
 
 /** Uploaded files come back as "/uploads/x.png"; make them loadable from the SPA origin. */
 export function assetUrl(url: string | null | undefined): string | undefined {

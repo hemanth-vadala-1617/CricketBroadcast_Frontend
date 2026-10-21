@@ -1,27 +1,29 @@
-﻿import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { api, ApiError, errorMessage } from '../../lib/api'
 import { newId } from '../../lib/utils'
 import { toast } from '../../store/useToast'
 import type { MatchState } from '../../lib/types'
 import { buildBall, createIdempotency, type Outcome, type PadAction } from './buildRequest'
 
-export interface InningsStartInput { battingTeamId?: string | null; strikerId: string; nonStrikerId: string; bowlerId: string }
+export interface InningsStartInput { battingTeamId?: string | null; strikerId: string; nonStrikerId: string; bowlerId: string; superOver?: boolean }
 export interface CompleteInput { resultType: 'Win' | 'Tie' | 'Draw' | 'NoResult' | 'Abandoned'; winnerTeamId?: string | null; resultText?: string | null }
 
 /** All scorer commands. One request at a time (no double-scoring); every command returns the new state. */
 export function useScorer(matchId: string, apply: (s: MatchState) => void) {
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)   // the last command's failure, so a dialog can show it (a toast is easy to miss)
   const lock = useRef(false)
   const keys = useRef(createIdempotency(newId))
 
   const run = useCallback(async (fn: () => Promise<MatchState>): Promise<Outcome> => {
     if (lock.current) return 'rejected'
-    lock.current = true; setBusy(true)
+    lock.current = true; setBusy(true); setError(null)
     try {
       apply(await fn())
       return 'ok'
     } catch (e) {
       toast.error(errorMessage(e))
+      setError(errorMessage(e))
       return e instanceof ApiError && e.status === 0 ? 'network' : 'rejected'
     } finally { lock.current = false; setBusy(false) }
   }, [apply])
@@ -39,16 +41,24 @@ export function useScorer(matchId: string, apply: (s: MatchState) => void) {
 
   return {
     busy,
+    error,
+    clearError: () => setError(null),
     score: (a: PadAction) => withKey(JSON.stringify(a), (id) => api.post<MatchState>(`${sc}/ball`, buildBall(a, id))),
     editLast: (a: PadAction, reason: string) =>
       withKey(`edit:${reason}:${JSON.stringify(a)}`, (id) => api.put<MatchState>(`${rv}/last-ball`, { reason, ball: buildBall(a, id) })),
     undo: (reason: string) => run(() => api.post<MatchState>(`${rv}/undo`, { reason })),
+    startBreak: (kind: string, minutes: number | null) => run(() => api.post<MatchState>(`${m}/break`, { kind, minutes })),
+    powerSurge: (start: boolean) => run(() => api.post<MatchState>(`${sc}/power-surge`, { start })),
+    sixDistance: (meters: number | null) => run(() => api.post<MatchState>(`${sc}/six-distance`, { meters })),
     swapStrike: () => run(() => api.post<MatchState>(`${sc}/swap-strike`)),
     newBatter: (playerId: string) => run(() => api.post<MatchState>(`${sc}/new-batter`, { playerId })),
     newBowler: (playerId: string, replaceMidOver = false) => run(() => api.post<MatchState>(`${sc}/new-bowler`, { playerId, replaceMidOver })),
     retire: (playerId: string, newBatterId: string | null, reason: string) =>
       run(() => api.post<MatchState>(`${sc}/retire`, { playerId, newBatterId, reason })),
-    penalty: (runs: number, reason: string) => run(() => api.post<MatchState>(`${sc}/penalty`, { runs, reason })),
+    penalty: (runs: number, reason: string, toFieldingSide = false) => run(() => api.post<MatchState>(`${sc}/penalty`, { runs, reason, toFieldingSide })),
+    deadBall: () => run(() => api.post<MatchState>(`${sc}/dead-ball`)),
+    absentHurt: (playerId: string, absent = true) => run(() => api.post<MatchState>(`${sc}/absent-hurt`, { playerId, absent })),
+    revise: (overs: number | null, target: number | null, reason: string) => run(() => api.post<MatchState>(`${sc}/revise`, { overs, target, reason })),
     cancelInnings: () => run(() => api.post<MatchState>(`${rv}/cancel-innings`)),
     startMatch: () => run(() => api.post<MatchState>(`${m}/start`)),
     startInnings: (i: InningsStartInput) => run(() => api.post<MatchState>(`${m}/innings/start`, i)),
