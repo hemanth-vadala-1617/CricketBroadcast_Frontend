@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, Keyboard, Maximize2, Minimize2, Radio, Volume2 } from 'lucide-react'
 import { playSiren } from '../../lib/sound'
 import { useLiveMatch } from '../../hooks/useLiveMatch'
-import type { LiveStatus } from '../../lib/liveMatch'
+import ConnectionBanner from '../../components/ConnectionBanner'
 import { Button, Card, ConfirmDialog, Field, Input, Modal, Spinner, StatusBadge } from '../../components/ui'
 import { cn } from '../../lib/utils'
 import ScoreStrip from '../../components/scorer/ScoreStrip'
@@ -22,15 +22,6 @@ import type { PadAction } from './buildRequest'
 
 type Dlg = null | 'wicket' | 'editWicket' | 'edit' | 'undo' | 'retire' | 'penalty' | 'endInnings' | 'declare' | 'complete'
   | 'oversLost' | 'cheat' | 'changeBowler' | 'cancelInnings' | 'session' | 'absent' | 'revise'
-
-const dot: Record<LiveStatus, { color: string; label: string }> = {
-  live: { color: 'bg-emerald-500', label: 'Live' },
-  connecting: { color: 'bg-amber-400', label: 'Connecting…' },
-  reconnecting: { color: 'bg-amber-400', label: 'Reconnecting…' },
-  offline: { color: 'bg-red-500', label: 'Offline' },
-  notfound: { color: 'bg-red-500', label: 'Match not found' },
-  idle: { color: 'bg-slate-400', label: 'Idle' },
-}
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -94,17 +85,13 @@ export default function ScorerConsole() {
           </div>
         </div>
         <StatusBadge status={state.status} />
-        {/* Only shown when the connection is NOT fine: a second "Live" next to the match's LIVE badge was confusing. */}
-        {status !== 'live' && (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600" role="status" aria-label={`Connection: ${dot[status].label}`}>
-            <span className={cn('size-2.5 rounded-full', dot[status].color)} />{dot[status].label}
-          </span>
-        )}
         <Link to={`/producer/${matchId}`} aria-label="Producer console" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Radio className="size-4" /><span className="hidden sm:inline">Producer</span></Link>
         <Button size="sm" variant="secondary" aria-label="Preview" aria-pressed={preview} onClick={() => setPreview((p) => !p)}>{preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}<span className="hidden sm:inline">Preview</span></Button>
         <Button size="sm" variant="secondary" aria-label="Test siren sound" title="Play the no-ball siren to check your volume" onClick={playSiren}><Volume2 className="size-4" /></Button>
         <ThemeToggle />
         <Button size="sm" variant="secondary" aria-label="Keyboard shortcuts" onClick={() => setDlg('cheat')}><Keyboard className="size-4" /></Button>
+        {/* a full-width bar inside the (sticky) header, so it stays in view while scoring */}
+        <ConnectionBanner status={status} />
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-[auto_1fr]">

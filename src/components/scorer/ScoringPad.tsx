@@ -47,7 +47,7 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
       if (e.repeat) return
-      if (panelNow.current === 'wide' || panelNow.current === 'noball') return   // a wide / no-ball dialog is open: keys must not score behind it
+      if (panelNow.current !== null) return   // a dialog is open: keys must not score behind it
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); latest.current.onUndo?.(); return }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
@@ -88,7 +88,7 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
       {/* below the buttons, not above: a banner above them pushed the whole pad down when a free hit began and back up when it ended */}
       {freeHit && <p role="status" className="rounded-lg bg-red-600 px-3 py-2 text-center text-sm font-bold text-white">FREE HIT — only run out, handled ball or obstructing the field</p>}
 
-      {/* Wide and no-ball open as a dialog (not a panel under the pad): the choices are bigger and nothing under the pad moves. */}
+      {/* Wide, no-ball, byes, leg-byes and the other run values open as a dialog (not a panel under the pad): the choices are bigger and nothing under the pad moves. */}
       <Modal open={panel === 'wide'} onClose={() => setPanel(null)} title="Wide" size="sm" footer={<Button variant="secondary" onClick={() => setPanel(null)}>Cancel</Button>}>
         <p className="mb-3 text-sm font-semibold text-slate-700">Extra runs they ran</p>
         <div className="flex flex-wrap gap-2">
@@ -121,36 +121,32 @@ export default function ScoringPad({ disabled, freeHit, shortcuts, onAction, onW
         </div>
       </Modal>
 
-      {(panel === 'bye' || panel === 'legbye') && (
-        <div className="rounded-lg border border-teal-300 bg-teal-50 p-3">
-          <p className="mb-2 text-sm font-semibold text-teal-900">{panel === 'bye' ? 'Byes' : 'Leg-byes'} — runs</p>
-          <div className="flex flex-wrap gap-2">
-            {[1, 2, 3].map((n) => <Chip key={n} label={`${n} ${panel}`} onClick={() => send({ kind: panel, runs: n })}>{n}</Chip>)}
-            <Chip label="4 ran" onClick={() => send({ kind: panel, runs: 4 })}>4 ran</Chip>
-            <Chip label="4 boundary" onClick={() => send({ kind: panel, runs: 4, boundary: true })}>4 ⛶</Chip>
-          </div>
+      <Modal open={panel === 'bye' || panel === 'legbye'} onClose={() => setPanel(null)} title={panel === 'legbye' ? 'Leg byes' : 'Byes'} size="sm" footer={<Button variant="secondary" onClick={() => setPanel(null)}>Cancel</Button>}>
+        <p className="mb-3 text-sm font-semibold text-slate-700">Runs</p>
+        <div className="flex flex-wrap gap-2">
+          {[1, 2, 3].map((n) => <Chip key={n} label={`${n} ${panel}`} onClick={() => send({ kind: panel === 'legbye' ? 'legbye' : 'bye', runs: n })}>{n}</Chip>)}
+          <Chip label="4 ran" onClick={() => send({ kind: panel === 'legbye' ? 'legbye' : 'bye', runs: 4 })}>4 ran</Chip>
+          <Chip label="4 boundary" onClick={() => send({ kind: panel === 'legbye' ? 'legbye' : 'bye', runs: 4, boundary: true })}>4 ⛶</Chip>
         </div>
-      )}
+      </Modal>
 
-      {panel === 'other' && (
-        <div className="rounded-lg border border-slate-300 bg-slate-50 p-3">
-          <p className="mb-2 text-sm font-semibold text-slate-700">Other run values off the bat</p>
-          <div className="flex flex-wrap gap-2">
-            <Chip label="Four runs ran, no boundary" onClick={() => send({ kind: 'runs', runs: 4 })}>4 ran (no boundary)</Chip>
-            <Chip label="Five runs" onClick={() => send({ kind: 'runs', runs: 5 })}>5</Chip>
-            <Chip label="Seven runs" onClick={() => send({ kind: 'runs', runs: 7 })}>7</Chip>
-          </div>
-          <p className="mb-2 mt-3 text-sm font-semibold text-slate-700">Short run — the umpire takes runs off</p>
-          <div className="flex flex-wrap gap-2">
-            {([[1, 1], [2, 1], [3, 1], [2, 2], [3, 2]] as const).map(([ran, short]) => (
-              <Chip key={`${ran}-${short}`} label={`Ran ${ran}, ${short} short`} onClick={() => send({ kind: 'runs', runs: ran, shortRuns: short })}>
-                ran {ran}, {short} short = {ran - short}
-              </Chip>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-slate-500">The score gets the runs left after the short run; the batters still change ends for the runs they actually ran.</p>
+      <Modal open={panel === 'other'} onClose={() => setPanel(null)} title="Other runs" size="md" footer={<Button variant="secondary" onClick={() => setPanel(null)}>Cancel</Button>}>
+        <p className="mb-2 text-sm font-semibold text-slate-700">Other run values off the bat</p>
+        <div className="flex flex-wrap gap-2">
+          <Chip label="Four runs ran, no boundary" onClick={() => send({ kind: 'runs', runs: 4 })}>4 ran (no boundary)</Chip>
+          <Chip label="Five runs" onClick={() => send({ kind: 'runs', runs: 5 })}>5</Chip>
+          <Chip label="Seven runs" onClick={() => send({ kind: 'runs', runs: 7 })}>7</Chip>
         </div>
-      )}
+        <p className="mb-2 mt-4 text-sm font-semibold text-slate-700">Short run — the umpire takes runs off</p>
+        <div className="flex flex-wrap gap-2">
+          {([[1, 1], [2, 1], [3, 1], [2, 2], [3, 2]] as const).map(([ran, short]) => (
+            <Chip key={`${ran}-${short}`} label={`Ran ${ran}, ${short} short`} onClick={() => send({ kind: 'runs', runs: ran, shortRuns: short })}>
+              ran {ran}, {short} short = {ran - short}
+            </Chip>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-slate-500">The score gets the runs left after the short run; the batters still change ends for the runs they actually ran.</p>
+      </Modal>
     </div>
   )
 }

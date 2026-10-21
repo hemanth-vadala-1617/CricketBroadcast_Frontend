@@ -43,3 +43,33 @@ describe('wide and no-ball open as dialogs', () => {
     expect(onAction).not.toHaveBeenCalled()
   })
 })
+
+describe('byes, leg-byes and the other run values open as dialogs too', () => {
+  it('Leg bye opens a dialog and scores leg-byes', async () => {
+    const onAction = setup()
+    await userEvent.click(screen.getByRole('button', { name: 'Leg bye' }))
+    const dlg = screen.getByRole('dialog', { name: 'Leg byes' })
+    await userEvent.click(within(dlg).getByRole('button', { name: '2 legbye' }))
+    expect(onAction).toHaveBeenCalledWith({ kind: 'legbye', runs: 2 })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('Bye opens a dialog and a boundary bye is sent as a boundary', async () => {
+    const onAction = setup()
+    await userEvent.click(screen.getByRole('button', { name: 'Bye' }))
+    const dlg = screen.getByRole('dialog', { name: 'Byes' })
+    await userEvent.click(within(dlg).getByRole('button', { name: '4 boundary' }))
+    expect(onAction).toHaveBeenCalledWith({ kind: 'bye', runs: 4, boundary: true })
+  })
+
+  it('"…" opens a dialog with the other run values and the short-run options', async () => {
+    const onAction = setup()
+    await userEvent.click(screen.getByRole('button', { name: 'Other run values' }))
+    const dlg = screen.getByRole('dialog', { name: 'Other runs' })
+    await userEvent.click(within(dlg).getByRole('button', { name: 'Five runs' }))
+    expect(onAction).toHaveBeenLastCalledWith({ kind: 'runs', runs: 5 })
+    await userEvent.click(screen.getByRole('button', { name: 'Other run values' }))
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Other runs' })).getByRole('button', { name: 'Ran 3, 2 short' }))
+    expect(onAction).toHaveBeenLastCalledWith({ kind: 'runs', runs: 3, shortRuns: 2 })
+  })
+})
